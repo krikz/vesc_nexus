@@ -17,7 +17,7 @@ WORKDIR /ws
 RUN mkdir -p src
 
 # Копируем только ваш пакет vesc_nexus
-COPY vesc_nexus src/vesc_nexus
+COPY . src/vesc_nexus
 
 # Сборка пакета
 RUN . /opt/ros/humble/setup.sh && \
