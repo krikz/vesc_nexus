@@ -8,8 +8,8 @@ find_package(builtin_interfaces REQUIRED)
 
 # Определите сообщения
 set(MSG_FILES
-  "msg/VescState.msg"
-  "msg/VescStateStamped.msg"
+  "VescState.msg"
+  "VescStateStamped.msg"
 )
 
 # Генерация интерфейсов
