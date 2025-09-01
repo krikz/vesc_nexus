@@ -1,9 +1,9 @@
 #ifndef VESC_DEVICE_HPP_
 #define VESC_DEVICE_HPP_
 
-#include "rclcpp/publisher.hpp"
+#include <rclcpp/rclcpp.hpp>
+#include <memory>
 #include "vesc_nexus/msg/vesc_state_stamped.hpp"
-
 
 class VescDevice
 {
