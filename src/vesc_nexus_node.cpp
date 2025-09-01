@@ -1,5 +1,4 @@
 #include "vesc_nexus/vesc_nexus_node.hpp"
-#include "vesc_manager.hpp"
 
 VescNexusNode::VescNexusNode() : Node("vesc_nexus_node")
 {
