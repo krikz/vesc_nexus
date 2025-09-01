@@ -1,0 +1,7 @@
+/**:
+  ros__parameters:
+    can_interfaces:
+      - name: can0
+        baudrate: 500000
+        vesc_ids: [1, 2, 3, 4]
+    publish_rate: 100.0
