@@ -32,9 +32,6 @@ ament_target_dependencies(vesc_nexus_core
   "geometry_msgs"
 )
 
-# Линковка (временно без rosidl — добавим позже)
-target_link_libraries(vesc_nexus_core)
-
 # Создаём исполняемый файл
 add_executable(vesc_nexus_node src/vesc_nexus_node.cpp)
 ament_target_dependencies(vesc_nexus_node
@@ -45,20 +42,23 @@ ament_target_dependencies(vesc_nexus_node
 )
 
 # Генерация сообщений — создаёт таргеты с ДВУМЯ подчёркиваниями: vesc_nexus__rosidl_*
+target_include_directories(vesc_nexus_node PUBLIC include)
+
+# Генерация сообщений — создаёт таргеты вида: vesc_nexus__rosidl_typesupport_*
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VescState.msg"
   "msg/VescStateStamped.msg"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 
-# Теперь можно добавить зависимости — с двумя подчёркиваниями!
+# Теперь можно добавить зависимости от сгенерированных типов (только после rosidl_generate_interfaces!)
 add_dependencies(vesc_nexus_core ${PROJECT_NAME}__rosidl_typesupport_c)
 add_dependencies(vesc_nexus_core ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
 add_dependencies(vesc_nexus_node ${PROJECT_NAME}__rosidl_typesupport_c)
 add_dependencies(vesc_nexus_node ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
-# Линковка
+# Линковка библиотеки с поддержкой сообщений
 target_link_libraries(vesc_nexus_core
   ${PROJECT_NAME}__rosidl_typesupport_c
   ${PROJECT_NAME}__rosidl_typesupport_cpp
@@ -88,10 +88,11 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/config
 )
 
-# Тесты
+# Тесты (опционально)
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+# Обязательно в конце
 ament_package()
