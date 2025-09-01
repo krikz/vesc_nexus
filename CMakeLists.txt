@@ -96,3 +96,11 @@ endif()
 
 # Обязательно в конце
 ament_package()
+
+# Установка конфигурационных файлов
+install(FILES
+  config/vesc_nexus_example.yaml
+  config/dual_can_config.yaml
+  config/single_can_quad.yaml
+  DESTINATION share/${PROJECT_NAME}/config
+)
