@@ -39,6 +39,15 @@ set(INCLUDES
 )
 
 add_library(vesc_nexus_core SHARED ${SOURCES})
+
+# Убедиться, что сообщения сгенерированы ДО компиляции
+add_dependencies(vesc_nexus_core ${PROJECT_NAME}_rosidl_typesupport_c)
+add_dependencies(vesc_nexus_core ${PROJECT_NAME}_rosidl_typesupport_cpp)
+
+# Также для исполняемого файла
+add_dependencies(vesc_nexus_node ${PROJECT_NAME}_rosidl_typesupport_c)
+add_dependencies(vesc_nexus_node ${PROJECT_NAME}_rosidl_typesupport_cpp)
+
 target_include_directories(vesc_nexus_core PUBLIC include)
 ament_target_dependencies(vesc_nexus_core
   "rclcpp"
@@ -54,7 +63,10 @@ ament_target_dependencies(vesc_nexus_node
   "diagnostic_msgs"
   "geometry_msgs"
 )
-target_link_libraries(vesc_nexus_node vesc_nexus_core)
+target_link_libraries(vesc_nexus_core
+  ${PROJECT_NAME}_rosidl_typesupport_c
+  ${PROJECT_NAME}_rosidl_typesupport_cpp
+)
 
 # Установка
 install(TARGETS

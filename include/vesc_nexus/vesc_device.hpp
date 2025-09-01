@@ -4,6 +4,7 @@
 #include "rclcpp/publisher.hpp"
 #include "vesc_nexus/msg/vesc_state_stamped.hpp"
 
+
 class VescDevice
 {
 public:
