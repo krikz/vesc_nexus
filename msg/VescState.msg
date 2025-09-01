@@ -1,0 +1,17 @@
+float32 v_in
+float32 temp_fet
+float32 temp_motor
+float32 current_motor
+float32 current_in
+float32 id
+float32 iq
+float32 duty_cycle
+int32 rpm
+float32 speed
+float32 amp_hours
+float32 amp_hours_charged
+float32 watt_hours
+float32 watt_hours_charged
+uint32 tachometer
+uint32 tachometer_abs
+uint32 fault_code

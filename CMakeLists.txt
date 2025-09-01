@@ -73,3 +73,10 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
+
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/VescState.msg"
+  "msg/VescStateStamped.msg"
+)
