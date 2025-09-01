@@ -34,6 +34,8 @@ ament_target_dependencies(vesc_nexus_core
 
 # Создаём исполняемый файл
 add_executable(vesc_nexus_node src/vesc_nexus_node.cpp)
+# Генерация сообщений — создаёт таргеты с ДВУМЯ подчёркиваниями: vesc_nexus__rosidl_*
+target_include_directories(vesc_nexus_node PUBLIC include)
 ament_target_dependencies(vesc_nexus_node
   "rclcpp"
   "std_msgs"
@@ -41,8 +43,7 @@ ament_target_dependencies(vesc_nexus_node
   "geometry_msgs"
 )
 
-# Генерация сообщений — создаёт таргеты с ДВУМЯ подчёркиваниями: vesc_nexus__rosidl_*
-target_include_directories(vesc_nexus_node PUBLIC include)
+
 
 # Генерация сообщений — создаёт таргеты вида: vesc_nexus__rosidl_typesupport_*
 rosidl_generate_interfaces(${PROJECT_NAME}
