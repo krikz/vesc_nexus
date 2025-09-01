@@ -2,19 +2,19 @@
 #define VESC_DEVICE_HPP_
 
 #include "rclcpp/publisher.hpp"
-#include "vesc_interfaces/msg/vesc_state_stamped.hpp"
+#include "vesc_nexus/msg/vesc_state_stamped.hpp"
 
 class VescDevice
 {
 public:
   VescDevice(uint8_t id, const std::string &can_interface, rclcpp::Node *node);
   void sendDutyCycle(float duty);
-  void updateState(const vesc_interfaces::msg::VescState &state);
+  void updateState(const vesc_nexus::msg::VescState &state);
 
 private:
   uint8_t id_;
   std::string can_interface_;
-  rclcpp::Publisher<vesc_interfaces::msg::VescStateStamped>::SharedPtr state_pub_;
+  rclcpp::Publisher<vesc_nexus::msg::VescStateStamped>::SharedPtr state_pub_;
   rclcpp::Node *node_;
 };
 

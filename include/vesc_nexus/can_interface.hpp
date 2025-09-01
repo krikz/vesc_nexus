@@ -5,6 +5,8 @@
 #include <functional>
 #include <string>
 #include <thread>
+#include <sys/ioctl.h>
+#include <net/if.h>
 
 class CanInterface
 {

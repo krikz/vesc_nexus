@@ -1,2 +1,2 @@
 std_msgs/Header header
-vesc_interfaces/VescState state
+vesc_nexus/VescState state

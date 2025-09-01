@@ -54,7 +54,7 @@ ros2 launch vesc_nexus vesc_nexus_node.launch.py
 
 - ROS 2 (Humble или новее)
 - SocketCAN
-- Пакет `vesc_interfaces` (или аналогичные сообщения)
+- Пакет `vesc_nexus` (или аналогичные сообщения)
 - Аппаратная поддержка CAN (например, MCP2515 или шилд для Raspberry Pi)
 
 ## Дальнейшее развитие
