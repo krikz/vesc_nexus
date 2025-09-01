@@ -44,32 +44,24 @@ ament_target_dependencies(vesc_nexus_node
   "geometry_msgs"
 )
 
-# ————————————————————————————————————————————————————
-# ГЕНЕРИРУЕМ СООБЩЕНИЯ — теперь можно использовать rosidl-таргеты
-# ————————————————————————————————————————————————————
-
+# Генерация сообщений — создаёт таргеты с ДВУМЯ подчёркиваниями: vesc_nexus__rosidl_*
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VescState.msg"
   "msg/VescStateStamped.msg"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 
-# ————————————————————————————————————————————————————
-# ТЕПЕРЬ можно добавить зависимости от rosidl
-# ————————————————————————————————————————————————————
+# Теперь можно добавить зависимости — с двумя подчёркиваниями!
+add_dependencies(vesc_nexus_core ${PROJECT_NAME}__rosidl_typesupport_c)
+add_dependencies(vesc_nexus_core ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
-# Зависимости для библиотеки — ПОСЛЕ rosidl_generate_interfaces
-add_dependencies(vesc_nexus_core ${PROJECT_NAME}_rosidl_typesupport_c)
-add_dependencies(vesc_nexus_core ${PROJECT_NAME}_rosidl_typesupport_cpp)
+add_dependencies(vesc_nexus_node ${PROJECT_NAME}__rosidl_typesupport_c)
+add_dependencies(vesc_nexus_node ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
-# Зависимости для узла — ПОСЛЕ rosidl_generate_interfaces
-add_dependencies(vesc_nexus_node ${PROJECT_NAME}_rosidl_typesupport_c)
-add_dependencies(vesc_nexus_node ${PROJECT_NAME}_rosidl_typesupport_cpp)
-
-# Линковка с типами поддержки сообщений
+# Линковка
 target_link_libraries(vesc_nexus_core
-  ${PROJECT_NAME}_rosidl_typesupport_c
-  ${PROJECT_NAME}_rosidl_typesupport_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_c
+  ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
 # Установка целей
