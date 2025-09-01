@@ -1,16 +1,17 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>{package_name}</name>
+  <name>vesc_nexus</name>
   <version>0.1.0</version>
   <description>
     Multi-CAN VESC driver for ROS 2. Supports multiple CAN interfaces and VESC IDs.
   </description>
 
-  <maintainer email="{email}">{maintainer}</maintainer>
-  <license>{license}</license>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>rcutils</depend>
@@ -20,6 +21,8 @@
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>
     <build_type>ament_cmake</build_type>
