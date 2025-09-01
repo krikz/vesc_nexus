@@ -7,7 +7,7 @@ import os
 
 def generate_launch_description():
     config = LaunchConfiguration('config', default=os.path.join(
-        get_package_share_directory('{package_name}'),
+        get_package_share_directory('vesc_nexus'),
         'config',
         'vesc_nexus_example.yaml'
     ))
@@ -16,9 +16,9 @@ def generate_launch_description():
         DeclareLaunchArgument('config', description='Path to config file'),
 
         Node(
-            package='{package_name}',
-            executable='{package_name}_node',
-            name='{package_name}_node',
+            package='vesc_nexus',
+            executable='vesc_nexus_node',
+            name='vesc_nexus_node',
             parameters=[config],
             output='screen',
             emulate_tty=True,

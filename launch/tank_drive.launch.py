@@ -4,8 +4,8 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-            package='{package_name}',
-            executable='{package_name}_node',
+            package='vesc_nexus',
+            executable='vesc_nexus_node',
             name='vesc_nexus_node',
             parameters=[{'can_interfaces': [
                 {{'name': 'can0', 'baudrate': 500000, 'vesc_ids': [1, 2]}},
