@@ -14,7 +14,12 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 # Найти или объявить сообщения
-add_subdirectory(msg)
+# Генерация сообщений
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/VescState.msg"
+  "msg/VescStateStamped.msg"
+  DEPENDENCIES builtin_interfaces
+)
 
 # Исходники
 set(SOURCES
