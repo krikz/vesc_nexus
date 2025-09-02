@@ -61,7 +61,8 @@ void VescInterface::Impl::connect(const std::string &can_interface) {
     struct ifreq ifr;
     strncpy(ifr.ifr_name, can_interface.c_str(), IFNAMSIZ);
     if (ioctl(can_socket_, SIOCGIFINDEX, &ifr) < 0) {
-        close(can_socket_);
+        close(can_socket_);        
+        RCLCPP_ERROR(this->get_logger(), "❌ Error getting interface index for %s", can_interface.c_str());
         throw std::runtime_error("Failed to get CAN interface index");
     }
 
