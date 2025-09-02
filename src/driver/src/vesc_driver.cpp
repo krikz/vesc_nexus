@@ -30,8 +30,8 @@
 
 #include "vesc_driver/vesc_driver.hpp"
 
-#include <vesc_interfaces/msg/vesc_state.hpp>
-#include <vesc_interfaces/msg/vesc_state_stamped.hpp>
+#include <std_msgs/msg/vesc_state.hpp>
+#include <std_msgs/msg/vesc_state_stamped.hpp>
 
 #include <cassert>
 #include <chrono>
@@ -46,7 +46,7 @@ namespace vesc_driver
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std_msgs::msg::Float64;
-using vesc_interfaces::msg::VescStateStamped;
+using std_msgs::msg::VescStateStamped;
 
 VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 : rclcpp::Node("vesc_driver", options),

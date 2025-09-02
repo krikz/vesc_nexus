@@ -48,7 +48,7 @@ namespace vesc_driver_lifecycle {
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std_msgs::msg::Float64;
-using vesc_interfaces::msg::VescStateStamped;
+using std_msgs::msg::VescStateStamped;
 
 
 VescDriverLifecycle::VescDriverLifecycle(const rclcpp::NodeOptions & options)

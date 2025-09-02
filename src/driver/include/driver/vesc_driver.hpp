@@ -33,8 +33,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
-#include <vesc_interfaces/msg/vesc_state.hpp>
-#include <vesc_interfaces/msg/vesc_state_stamped.hpp>
+#include <std_msgs/msg/vesc_state.hpp>
+#include <std_msgs/msg/vesc_state_stamped.hpp>
 #include <experimental/optional>
 #include <memory>
 #include <string>
@@ -46,8 +46,8 @@ namespace vesc_driver
 {
 
 using std_msgs::msg::Float64;
-using vesc_interfaces::msg::VescState;
-using vesc_interfaces::msg::VescStateStamped;
+using std_msgs::msg::VescState;
+using std_msgs::msg::VescStateStamped;
 
 class VescDriver
   : public rclcpp::Node
