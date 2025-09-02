@@ -178,7 +178,7 @@ void VescInterface::send(const VescPacket &packet) {
     
     // Логируем информацию о пакете
     RCLCPP_INFO(rclcpp::get_logger("VescInterface"), "Sending VESC packet with ID: %d, data length: %zu", 
-                packet.vesc_id, frame_data.size());
+                66, frame_data.size());
     
     // Проверяем, что сокет открыт
     if (impl_->can_socket_ < 0) {
@@ -192,7 +192,7 @@ void VescInterface::send(const VescPacket &packet) {
     
     // Устанавливаем CAN ID (используем ID VESC)
     // Для VESC используется расширенный формат ID (29 бит)
-    can_frame.can_id = (packet.vesc_id << 8) | 0x00; // Формат ID для VESC
+    can_frame.can_id = (66 << 8) | 0x00; // Формат ID для VESC
     can_frame.can_id |= CAN_EFF_FLAG; // Устанавливаем флаг расширенного формата
     
     // Копируем данные (пропуская префикс UART)
