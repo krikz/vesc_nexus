@@ -36,14 +36,6 @@ struct VescInfo {
     rclcpp::Subscription<Float64>::SharedPtr servo_sub;
 };
 
-// ИСПРАВЛЕНИЕ 1: Добавлен конструктор по умолчанию для CommandLimit
-VescDriverLifecycle::CommandLimit::CommandLimit()
-    : node_ptr(nullptr),
-      logger(rclcpp::get_logger("CommandLimit")),
-      name("unnamed") {
-    RCLCPP_DEBUG_STREAM(logger, "CommandLimit default constructor called");
-}
-
 VescDriverLifecycle::CommandLimit::CommandLimit(
   rclcpp_lifecycle::LifecycleNode * node_ptr,
   const std::string & str,
@@ -146,7 +138,7 @@ double VescDriverLifecycle::CommandLimit::clip(double value)
 
 VescDriverLifecycle::VescDriverLifecycle(const rclcpp::NodeOptions & options)
 : rclcpp_lifecycle::LifecycleNode("vesc_driver_lifecycle", options),
-  // ИСПРАВЛЕНИЕ 2: Инициализация CommandLimit с помощью параметров
+  // ИСПРАВЛЕНИЕ: Убрано упоминание vesc_ из списка инициализации
   duty_cycle_limit_(this, "duty_cycle", -1.0, 1.0),
   current_limit_(this, "current"),
   brake_limit_(this, "brake"),
@@ -158,6 +150,10 @@ VescDriverLifecycle::VescDriverLifecycle(const rclcpp::NodeOptions & options)
   fw_version_minor_(-1)
 {
   RCLCPP_INFO(get_logger(), "Node started...");
+  
+  // ИНИЦИАЛИЗАЦИЯ ЧЛЕНОВ КЛАССА
+  this->declare_parameter<std::string>("can_interfaces_json", R"([{"name": "can0", "baudrate": "500000", "vesc_ids": [{"id": "1", "label": "front_left"}, {"id": "2", "label": "front_right"}, {"id": "3", "label": "rear_left"}, {"id": "4", "label": "rear_right"}]}])");
+  this->declare_parameter<double>("publish_rate", 100.0);
 }
 
 // ON CONFIGURE
@@ -166,10 +162,6 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
   RCLCPP_INFO(get_logger(), "Configuring node...");
 
   try {
-    // ИСПРАВЛЕНИЕ 3: Объявляем параметр, если он еще не объявлен
-    this->declare_parameter<std::string>("can_interfaces_json", R"([{"name": "can0", "baudrate": "500000", "vesc_ids": [{"id": "1", "label": "front_left"}, {"id": "2", "label": "front_right"}, {"id": "3", "label": "rear_left"}, {"id": "4", "label": "rear_right"}]}])");
-    this->declare_parameter<double>("publish_rate", 100.0);
-
     // Загружаем JSON-строку из параметров
     std::string can_interfaces_json = get_parameter("can_interfaces_json").as_string();
     double publish_rate = get_parameter("publish_rate").as_double();
@@ -389,12 +381,11 @@ void VescDriverLifecycle::timerCallback()
   }
 }
 
-// ИСПРАВЛЕНИЕ 4: Убран дополнительный аргумент из сигнатуры
 void VescDriverLifecycle::vescPacketCallback(
   const std::shared_ptr<vesc_driver::VescPacket const> & packet)
 {
   // Определяем ID VESC из пакета
-  uint8_t vesc_id = packet->vesc_id();
+  uint8_t vesc_id = packet->vesc_id;  // ИСПРАВЛЕНИЕ: используем поле, а не метод
   
   // Находим соответствующий VESC в списке
   auto it = std::find_if(vescs_.begin(), vescs_.end(), 
@@ -463,13 +454,12 @@ void VescDriverLifecycle::vescPacketCallback(
   );
 }
 
-// ИСПРАВЛЕНИЕ 5: Убран дополнительный аргумент из сигнатуры
 void VescDriverLifecycle::vescErrorCallback(const std::string & error)
 {
   RCLCPP_ERROR(get_logger(), "CAN interface error: %s", error.c_str());
 }
 
-// ИСПРАВЛЕНИЕ 6: Добавлены методы с правильными сигнатурами
+// ИСПРАВЛЕНИЕ: Обновлены сигнатуры методов
 void VescDriverLifecycle::dutyCycleCallback(const Float64::SharedPtr duty_cycle, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
