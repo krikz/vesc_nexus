@@ -3,7 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <memory>
-#include "vesc_msgs/msg/vesc_state_stamped.hpp"
+#include <vesc_msgs/msg/vesc_state_stamped.hpp>
 
 class VescDevice
 {
