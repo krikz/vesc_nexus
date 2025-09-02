@@ -37,8 +37,8 @@ def launch_setup(context):
     return [
         Node(
             package='vesc_driver',
-            executable='vesc_driver_node',
-            name='vesc_driver_node',
+            executable='vesc_driver_lc_node',
+            name='vesc_driver_lc_node',
             parameters=[file_parameters],
         )
     ]
