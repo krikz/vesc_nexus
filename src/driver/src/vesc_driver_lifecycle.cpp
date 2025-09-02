@@ -18,6 +18,7 @@ namespace vesc_driver_lifecycle {
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
+using std::placeholders::_2;
 using std_msgs::msg::Float64;
 using vesc_msgs::msg::VescStateStamped;
 
@@ -35,8 +36,123 @@ struct VescInfo {
     rclcpp::Subscription<Float64>::SharedPtr servo_sub;
 };
 
+// ИСПРАВЛЕНИЕ 1: Добавлен конструктор по умолчанию для CommandLimit
+VescDriverLifecycle::CommandLimit::CommandLimit()
+    : node_ptr(nullptr),
+      logger(rclcpp::get_logger("CommandLimit")),
+      name("unnamed") {
+    RCLCPP_DEBUG_STREAM(logger, "CommandLimit default constructor called");
+}
+
+VescDriverLifecycle::CommandLimit::CommandLimit(
+  rclcpp_lifecycle::LifecycleNode * node_ptr,
+  const std::string & str,
+  const std::optional<double> & min_lower,
+  const std::optional<double> & max_upper)
+: node_ptr(node_ptr),
+  logger(node_ptr->get_logger()),
+  name(str)
+{
+  // проверка минимального значения параметра
+  auto param_min =
+    node_ptr->declare_parameter(name + "_min", rclcpp::ParameterValue(0.0));
+
+  if (param_min.get_type() != rclcpp::ParameterType::PARAMETER_NOT_SET) {
+    if (min_lower && param_min.get<double>() < *min_lower) {
+      lower = *min_lower;
+      RCLCPP_WARN_STREAM(
+        logger, "Parameter " << name << "_min (" << param_min.get<double>() <<
+          ") is less than the feasible minimum (" << *min_lower << ").");
+    } else if (max_upper && param_min.get<double>() > *max_upper) {
+      lower = *max_upper;
+      RCLCPP_WARN_STREAM(
+        logger, "Parameter " << name << "_min (" << param_min.get<double>() <<
+          ") is greater than the feasible maximum (" << *max_upper << ").");
+    } else {
+      lower = param_min.get<double>();
+    }
+  } else if (min_lower) {
+    lower = *min_lower;
+  }
+
+  // проверка максимального значения параметра
+  auto param_max =
+    node_ptr->declare_parameter(name + "_max", rclcpp::ParameterValue(0.0));
+
+  if (param_max.get_type() != rclcpp::ParameterType::PARAMETER_NOT_SET) {
+    if (min_lower && param_max.get<double>() < *min_lower) {
+      upper = *min_lower;
+      RCLCPP_WARN_STREAM(
+        logger, "Parameter " << name << "_max (" << param_max.get<double>() <<
+          ") is less than the feasible minimum (" << *min_lower << ").");
+    } else if (max_upper && param_max.get<double>() > *max_upper) {
+      upper = *max_upper;
+      RCLCPP_WARN_STREAM(
+        logger, "Parameter " << name << "_max (" << param_max.get<double>() <<
+          ") is greater than the feasible maximum (" << *max_upper << ").");
+    } else {
+      upper = param_max.get<double>();
+    }
+  } else if (max_upper) {
+    upper = *max_upper;
+  }
+
+  // проверка min > max
+  if (upper && lower && *lower > *upper) {
+    RCLCPP_WARN_STREAM(
+      logger, "Parameter " << name << "_max (" << *upper <<
+        ") is less than parameter " << name << "_min (" << *lower << ").");
+    double temp(*lower);
+    lower = *upper;
+    upper = temp;
+  }
+
+  std::ostringstream oss;
+  oss << "  " << name << " limit: ";
+
+  if (lower) {
+    oss << *lower << " ";
+  } else {
+    oss << "(none) ";
+  }
+
+  if (upper) {
+    oss << *upper;
+  } else {
+    oss << "(none)";
+  }
+
+  RCLCPP_DEBUG_STREAM(logger, oss.str());
+}
+
+double VescDriverLifecycle::CommandLimit::clip(double value)
+{
+  auto clock = rclcpp::Clock(RCL_ROS_TIME);
+
+  if (lower && value < lower) {
+    RCLCPP_INFO_THROTTLE(
+      logger, clock, 10, "%s command value (%f) below minimum limit (%f), clipping.",
+      name.c_str(), value, *lower);
+    return *lower;
+  }
+  if (upper && value > upper) {
+    RCLCPP_INFO_THROTTLE(
+      logger, clock, 10, "%s command value (%f) above maximum limit (%f), clipping.",
+      name.c_str(), value, *upper);
+    return *upper;
+  }
+  return value;
+}
+
 VescDriverLifecycle::VescDriverLifecycle(const rclcpp::NodeOptions & options)
 : rclcpp_lifecycle::LifecycleNode("vesc_driver_lifecycle", options),
+  // ИСПРАВЛЕНИЕ 2: Инициализация CommandLimit с помощью параметров
+  duty_cycle_limit_(this, "duty_cycle", -1.0, 1.0),
+  current_limit_(this, "current"),
+  brake_limit_(this, "brake"),
+  speed_limit_(this, "speed"),
+  position_limit_(this, "position"),
+  servo_limit_(this, "servo", 0.0, 1.0),
   driver_mode_(MODE_INITIALIZING),
   fw_version_major_(-1),
   fw_version_minor_(-1)
@@ -50,6 +166,10 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
   RCLCPP_INFO(get_logger(), "Configuring node...");
 
   try {
+    // ИСПРАВЛЕНИЕ 3: Объявляем параметр, если он еще не объявлен
+    this->declare_parameter<std::string>("can_interfaces_json", R"([{"name": "can0", "baudrate": "500000", "vesc_ids": [{"id": "1", "label": "front_left"}, {"id": "2", "label": "front_right"}, {"id": "3", "label": "rear_left"}, {"id": "4", "label": "rear_right"}]}])");
+    this->declare_parameter<double>("publish_rate", 100.0);
+
     // Загружаем JSON-строку из параметров
     std::string can_interfaces_json = get_parameter("can_interfaces_json").as_string();
     double publish_rate = get_parameter("publish_rate").as_double();
@@ -69,8 +189,8 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
         // Создаем CAN-интерфейс
         auto can_interface = std::make_shared<vesc_driver::VescInterface>(
             interface_name,
-            std::bind(&VescDriverLifecycle::vescPacketCallback, this, _1, interface_name),
-            std::bind(&VescDriverLifecycle::vescErrorCallback, this, _1, interface_name)
+            std::bind(&VescDriverLifecycle::vescPacketCallback, this, _1),
+            std::bind(&VescDriverLifecycle::vescErrorCallback, this, _1)
         );
 
         can_interfaces_.push_back(can_interface);
@@ -101,32 +221,32 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
             vesc.duty_cycle_sub = create_subscription<Float64>(
                 topic_prefix + "/commands/motor/duty_cycle", rclcpp::QoS{10},
                 [this, id](const Float64::SharedPtr msg) {
-                    handleDutyCycleCallback(id, msg);
+                    dutyCycleCallback(msg, id);
                 });
             vesc.current_sub = create_subscription<Float64>(
                 topic_prefix + "/commands/motor/current", rclcpp::QoS{10},
                 [this, id](const Float64::SharedPtr msg) {
-                    handleCurrentCallback(id, msg);
+                    currentCallback(msg, id);
                 });
             vesc.brake_sub = create_subscription<Float64>(
                 topic_prefix + "/commands/motor/brake", rclcpp::QoS{10},
                 [this, id](const Float64::SharedPtr msg) {
-                    handleBrakeCallback(id, msg);
+                    brakeCallback(msg, id);
                 });
             vesc.speed_sub = create_subscription<Float64>(
                 topic_prefix + "/commands/motor/speed", rclcpp::QoS{10},
                 [this, id](const Float64::SharedPtr msg) {
-                    handleSpeedCallback(id, msg);
+                    speedCallback(msg, id);
                 });
             vesc.position_sub = create_subscription<Float64>(
                 topic_prefix + "/commands/motor/position", rclcpp::QoS{10},
                 [this, id](const Float64::SharedPtr msg) {
-                    handlePositionCallback(id, msg);
+                    positionCallback(msg, id);
                 });
             vesc.servo_sub = create_subscription<Float64>(
                 topic_prefix + "/commands/servo/position", rclcpp::QoS{10},
                 [this, id](const Float64::SharedPtr msg) {
-                    handleServoCallback(id, msg);
+                    servoCallback(msg, id);
                 });
             
             // Добавляем VESC в список
@@ -269,9 +389,9 @@ void VescDriverLifecycle::timerCallback()
   }
 }
 
+// ИСПРАВЛЕНИЕ 4: Убран дополнительный аргумент из сигнатуры
 void VescDriverLifecycle::vescPacketCallback(
-  const std::shared_ptr<vesc_driver::VescPacket const> & packet, 
-  const std::string& interface_name)
+  const std::shared_ptr<vesc_driver::VescPacket const> & packet)
 {
   // Определяем ID VESC из пакета
   uint8_t vesc_id = packet->vesc_id();
@@ -343,65 +463,66 @@ void VescDriverLifecycle::vescPacketCallback(
   );
 }
 
-void VescDriverLifecycle::vescErrorCallback(const std::string & error, const std::string& interface_name)
+// ИСПРАВЛЕНИЕ 5: Убран дополнительный аргумент из сигнатуры
+void VescDriverLifecycle::vescErrorCallback(const std::string & error)
 {
-  RCLCPP_ERROR(get_logger(), "CAN interface %s: %s", interface_name.c_str(), error.c_str());
+  RCLCPP_ERROR(get_logger(), "CAN interface error: %s", error.c_str());
 }
 
-// Обработчики для каждого VESC
-void VescDriverLifecycle::handleDutyCycleCallback(uint8_t vesc_id, const Float64::SharedPtr duty_cycle)
+// ИСПРАВЛЕНИЕ 6: Добавлены методы с правильными сигнатурами
+void VescDriverLifecycle::dutyCycleCallback(const Float64::SharedPtr duty_cycle, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
-    // Найти соответствующий CAN-интерфейс и отправить команду
     for (auto& can_interface : can_interfaces_) {
-      can_interface->setDutyCycle(vesc_id, duty_cycle->data);
+      can_interface->setDutyCycle(vesc_id, duty_cycle_limit_.clip(duty_cycle->data));
     }
   }
 }
 
-void VescDriverLifecycle::handleCurrentCallback(uint8_t vesc_id, const Float64::SharedPtr current)
+void VescDriverLifecycle::currentCallback(const Float64::SharedPtr current, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
     for (auto& can_interface : can_interfaces_) {
-      can_interface->setCurrent(vesc_id, current->data);
+      can_interface->setCurrent(vesc_id, current_limit_.clip(current->data));
     }
   }
 }
 
-void VescDriverLifecycle::handleBrakeCallback(uint8_t vesc_id, const Float64::SharedPtr brake)
+void VescDriverLifecycle::brakeCallback(const Float64::SharedPtr brake, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
     for (auto& can_interface : can_interfaces_) {
-      can_interface->setBrake(vesc_id, brake->data);
+      can_interface->setBrake(vesc_id, brake_limit_.clip(brake->data));
     }
   }
 }
 
-void VescDriverLifecycle::handleSpeedCallback(uint8_t vesc_id, const Float64::SharedPtr speed)
+void VescDriverLifecycle::speedCallback(const Float64::SharedPtr speed, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
     for (auto& can_interface : can_interfaces_) {
-      can_interface->setSpeed(vesc_id, speed->data);
+      can_interface->setSpeed(vesc_id, speed_limit_.clip(speed->data));
     }
   }
 }
 
-void VescDriverLifecycle::handlePositionCallback(uint8_t vesc_id, const Float64::SharedPtr position)
+void VescDriverLifecycle::positionCallback(const Float64::SharedPtr position, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
     // ROS использует радианы, VESC использует градусы. Конвертируем.
-    double position_deg = position->data * 180.0 / M_PI;
+    double position_deg = position_limit_.clip(position->data) * 180.0 / M_PI;
     for (auto& can_interface : can_interfaces_) {
       can_interface->setPosition(vesc_id, position_deg);
     }
   }
 }
 
-void VescDriverLifecycle::handleServoCallback(uint8_t vesc_id, const Float64::SharedPtr servo)
+void VescDriverLifecycle::servoCallback(const Float64::SharedPtr servo, uint8_t vesc_id)
 {
   if (driver_mode_ == MODE_ACTIVE) {
     for (auto& can_interface : can_interfaces_) {
-      can_interface->setServo(vesc_id, servo->data);
+      double servo_clipped = servo_limit_.clip(servo->data);
+      can_interface->setServo(vesc_id, servo_clipped);
       
       // Публикуем значение серво как "сенсор"
       auto it = std::find_if(vescs_.begin(), vescs_.end(), 
@@ -409,109 +530,11 @@ void VescDriverLifecycle::handleServoCallback(uint8_t vesc_id, const Float64::Sh
       
       if (it != vescs_.end()) {
         auto servo_sensor_msg = Float64();
-        servo_sensor_msg.data = servo->data;
+        servo_sensor_msg.data = servo_clipped;
         it->servo_sensor_pub->publish(servo_sensor_msg);
       }
     }
   }
-}
-
-VescDriverLifecycle::CommandLimit::CommandLimit(
-  rclcpp_lifecycle::LifecycleNode * node_ptr,
-  const std::string & str,
-  const std::optional<double> & min_lower,
-  const std::optional<double> & max_upper)
-: node_ptr(node_ptr),
-  logger(node_ptr->get_logger()),
-  name(str)
-{
-  // Проверяем минимальное значение параметра
-  auto param_min = node_ptr->declare_parameter(name + "_min", rclcpp::ParameterValue(0.0));
-
-  if (param_min.get_type() != rclcpp::ParameterType::PARAMETER_NOT_SET) {
-    if (min_lower && param_min.get<double>() < *min_lower) {
-      lower = *min_lower;
-      RCLCPP_WARN_STREAM(
-        logger, "Parameter " << name << "_min (" << param_min.get<double>() <<
-          ") is less than the feasible minimum (" << *min_lower << ").");
-    } else if (max_upper && param_min.get<double>() > *max_upper) {
-      lower = *max_upper;
-      RCLCPP_WARN_STREAM(
-        logger, "Parameter " << name << "_min (" << param_min.get<double>() <<
-          ") is greater than the feasible maximum (" << *max_upper << ").");
-    } else {
-      lower = param_min.get<double>();
-    }
-  } else if (min_lower) {
-    lower = *min_lower;
-  }
-
-  // Проверяем максимальное значение параметра
-  auto param_max = node_ptr->declare_parameter(name + "_max", rclcpp::ParameterValue(0.0));
-
-  if (param_max.get_type() != rclcpp::ParameterType::PARAMETER_NOT_SET) {
-    if (min_lower && param_max.get<double>() < *min_lower) {
-      upper = *min_lower;
-      RCLCPP_WARN_STREAM(
-        logger, "Parameter " << name << "_max (" << param_max.get<double>() <<
-          ") is less than the feasible minimum (" << *min_lower << ").");
-    } else if (max_upper && param_max.get<double>() > *max_upper) {
-      upper = *max_upper;
-      RCLCPP_WARN_STREAM(
-        logger, "Parameter " << name << "_max (" << param_max.get<double>() <<
-          ") is greater than the feasible maximum (" << *max_upper << ").");
-    } else {
-      upper = param_max.get<double>();
-    }
-  } else if (max_upper) {
-    upper = *max_upper;
-  }
-
-  // Проверяем min > max
-  if (upper && lower && *lower > *upper) {
-    RCLCPP_WARN_STREAM(
-      logger, "Parameter " << name << "_max (" << *upper <<
-        ") is less than parameter " << name << "_min (" << *lower << ").");
-    double temp = *lower;
-    lower = *upper;
-    upper = temp;
-  }
-
-  std::ostringstream oss;
-  oss << "  " << name << " limit: ";
-
-  if (lower) {
-    oss << *lower << " ";
-  } else {
-    oss << "(none) ";
-  }
-
-  if (upper) {
-    oss << *upper;
-  } else {
-    oss << "(none)";
-  }
-
-  RCLCPP_DEBUG_STREAM(logger, oss.str());
-}
-
-double VescDriverLifecycle::CommandLimit::clip(double value)
-{
-  auto clock = rclcpp::Clock(RCL_ROS_TIME);
-
-  if (lower && value < lower) {
-    RCLCPP_INFO_THROTTLE(
-      logger, clock, 10, "%s command value (%f) below minimum limit (%f), clipping.",
-      name.c_str(), value, *lower);
-    return *lower;
-  }
-  if (upper && value > upper) {
-    RCLCPP_INFO_THROTTLE(
-      logger, clock, 10, "%s command value (%f) above maximum limit (%f), clipping.",
-      name.c_str(), value, *upper);
-    return *upper;
-  }
-  return value;
 }
 
 }  // namespace vesc_driver_lifecycle
