@@ -11,6 +11,7 @@ public:
 
 private:
     std::unique_ptr<VescManager> vesc_manager_;
+    rclcpp::NodeOptions modifyNodeOptions(const rclcpp::NodeOptions& options);
 };
 
 #endif // VESC_DRIVER_NODE_HPP_

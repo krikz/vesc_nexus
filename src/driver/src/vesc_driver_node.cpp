@@ -2,9 +2,8 @@
 #include <stdexcept>
 
 VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
-    : Node("vesc_driver_node", options)
+    : Node("vesc_driver_node", modifyNodeOptions(options))
 {
-    options.allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
     RCLCPP_INFO(this->get_logger(), "VescNexusNode started.");
 
     // Инициализируем менеджер VESC
@@ -44,6 +43,13 @@ VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
 
     // Запускаем менеджер VESC
     vesc_manager_->start();
+}
+
+// Вспомогательная функция для модификации NodeOptions
+rclcpp::NodeOptions VescNexusNode::modifyNodeOptions(const rclcpp::NodeOptions& options) {
+    rclcpp::NodeOptions modified_options = options;
+    modified_options.allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
+    return modified_options;
 }
 
 #include "rclcpp_components/register_node_macro.hpp"
