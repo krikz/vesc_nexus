@@ -13,45 +13,35 @@ endif()
 # Find dependencies
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
-find_package(Threads REQUIRED)
+find_package(Threads)
 
-# Sources
-set(SOURCES
+###########
+## Build ##
+###########
+
+# node library
+ament_auto_add_library(${PROJECT_NAME} SHARED
   src/vesc_nexus_node.cpp
   src/can_interface.cpp
   src/vesc_manager.cpp
   src/vesc_device.cpp
   src/packet_handler.cpp
 )
-
-# Library
-ament_auto_add_library(${PROJECT_NAME} SHARED ${SOURCES})
-target_include_directories(${PROJECT_NAME} PUBLIC include)
-ament_target_dependencies(${PROJECT_NAME}
-  rclcpp
-  std_msgs
-  diagnostic_msgs
-  geometry_msgs
-  vesc_msgs
+target_link_libraries(${PROJECT_NAME}
+  ${CMAKE_THREAD_LIBS_INIT}
 )
-target_link_libraries(${PROJECT_NAME} Threads::Threads)
-
-# Executable
-ament_auto_add_executable(${PROJECT_NAME}_node src/vesc_nexus_node.cpp)
-ament_target_dependencies(${PROJECT_NAME}_node
-  rclcpp
-  std_msgs
-  diagnostic_msgs
-  geometry_msgs
-  vesc_msgs
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN vesc_driver::VescDriver
+  EXECUTABLE ${PROJECT_NAME}_node
+)
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN vesc_driver_lifecycle::VescDriverLifecycle
+  EXECUTABLE ${PROJECT_NAME}_lc_node
 )
 
-# Install files
-ament_auto_package(
-  INSTALL_TO_SHARE
-    launch
-    config
-)
+#############
+## Testing ##
+#############
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
