@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "driver/vesc_packet.hpp"
-#include "driver/vesc_packet_values.hpp"
 #include "driver/vesc_packet_firmware_version.hpp"
 #include "vesc_msgs/msg/vesc_state_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
