@@ -50,8 +50,8 @@ namespace vesc_driver_lifecycle
 {
 
 using std_msgs::msg::Float64;
-using std_msgs::msg::VescState;
-using std_msgs::msg::VescStateStamped;
+using vesc_msgs::msg::VescState;
+using vesc_msgs::msg::VescStateStamped;
 using LifecycleCallbackReturn =
         rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 

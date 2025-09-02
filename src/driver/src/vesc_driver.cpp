@@ -43,7 +43,7 @@ namespace vesc_driver
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using std_msgs::msg::Float64;
-using std_msgs::msg::VescStateStamped;
+using vesc_msgs::msg::VescStateStamped;
 
 VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 : rclcpp::Node("vesc_driver", options),
