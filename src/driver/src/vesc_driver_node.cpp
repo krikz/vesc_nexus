@@ -48,31 +48,4 @@ VescNexusNode::VescNexusNode() : Node("vesc_driver_node")
     vesc_manager_->start();
 }
 
-int main(int argc, char *argv[])
-{
-    // Инициализация ROS 2
-    RCLCPP_INFO(rclcpp::get_logger("main"), "Initializing ROS 2...");
-    rclcpp::init(argc, argv);
-    RCLCPP_INFO(rclcpp::get_logger("main"), "ROS 2 initialized successfully.");
-
-    // Создание ноды
-    RCLCPP_INFO(rclcpp::get_logger("main"), "Creating VescNexusNode...");
-    auto node = std::make_shared<VescNexusNode>();
-    RCLCPP_INFO(rclcpp::get_logger("main"), "VescNexusNode created successfully.");
-
-    // Запуск spin
-    RCLCPP_INFO(rclcpp::get_logger("main"), "Starting rclcpp::spin...");
-    try {
-        rclcpp::spin(node);
-        RCLCPP_INFO(rclcpp::get_logger("main"), "rclcpp::spin completed.");
-    } catch (const std::exception &e) {
-        RCLCPP_ERROR(rclcpp::get_logger("main"), "Exception during rclcpp::spin: %s", e.what());
-    }
-
-    // Завершение работы ROS 2
-    RCLCPP_INFO(rclcpp::get_logger("main"), "Shutting down ROS 2...");
-    rclcpp::shutdown();
-    RCLCPP_INFO(rclcpp::get_logger("main"), "ROS 2 shutdown completed.");
-
-    return 0;
-}
+RCLCPP_COMPONENTS_REGISTER_NODE(VescNexusNode)
