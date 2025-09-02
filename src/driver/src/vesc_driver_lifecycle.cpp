@@ -68,7 +68,7 @@ VescDriverLifecycle::VescDriverLifecycle(const rclcpp::NodeOptions & options)
   fw_version_minor_(-1)
 {
   // Declare parameters here
-  this->declare_parameter<std::string>("port", "/dev/ttyACM0");
+  this->declare_parameter<std::string>("can_interface", "can666");
   RCLCPP_INFO(get_logger(), "Node started...");
 }
 
@@ -78,7 +78,7 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
   RCLCPP_INFO(get_logger(), "Configuring node...");
 
   // Get VESC serial port address
-  std::string port = get_parameter("port").as_string();
+  std::string port = get_parameter("can_interface").as_string();
   try {
     vesc_.connect(port);
   } catch (const std::exception &e) {

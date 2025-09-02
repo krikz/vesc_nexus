@@ -1,4 +1,19 @@
 /**:
   ros__parameters:
-    can_interfaces_json: '[{"name": "can0", "baudrate": "500000", "vesc_ids": [{"id": "1", "label": "front_left"}, {"id": "2", "label": "front_right"}, {"id": "3", "label": "rear_left"}, {"id": "4", "label": "rear_right"}]}]'
+    can_interface: "can0"
+    can_baudrate: 500000
+    vesc_ids: [1, 2, 3, 4]
+    wheel_labels: ["front_left", "front_right", "rear_left", "rear_right"]
     publish_rate: 100.0
+    brake_max: 200000.0
+    brake_min: -20000.0
+    current_max: 10.0
+    current_min: 0.0
+    duty_cycle_max: 0.0
+    duty_cycle_min: 0.0
+    position_max: 0.0
+    position_min: 0.0
+    servo_max: 0.85
+    servo_min: 0.15
+    speed_max: 23250.0
+    speed_min: -23250.0
