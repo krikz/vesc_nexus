@@ -1,4 +1,4 @@
-#include "vesc_nexus/vesc_nexus_node.hpp"
+#include "driver/vesc_nexus_node.hpp"
 
 VescNexusNode::VescNexusNode() : Node("vesc_nexus_node")
 {

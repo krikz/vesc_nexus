@@ -1,4 +1,4 @@
-#include "vesc_nexus/vesc_device.hpp"
+#include "driver/vesc_device.hpp"
 
 VescDevice::VescDevice(uint8_t id, const std::string &can_interface, rclcpp::Node *node)
     : id_(id), can_interface_(can_interface), node_(node)

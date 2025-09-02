@@ -1,4 +1,4 @@
-#include "vesc_nexus/vesc_manager.hpp"
+#include "driver/vesc_manager.hpp"
 
 VescManager::VescManager(rclcpp::Node *node) : node_(node) {}
 

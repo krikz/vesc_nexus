@@ -1,4 +1,4 @@
-#include "vesc_nexus/can_interface.hpp"
+#include "driver/can_interface.hpp"
 #include <sys/socket.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
