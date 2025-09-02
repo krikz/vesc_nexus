@@ -3,7 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <memory>
-#include "vesc_nexus/msg/vesc_state_stamped.hpp"
+#include "vesc_msgs/msg/vesc_state_stamped.hpp"
 
 class VescDevice
 {
@@ -15,7 +15,7 @@ public:
 private:
   uint8_t id_;
   std::string can_interface_;
-  rclcpp::Publisher<vesc_nexus::msg::VescStateStamped>::SharedPtr state_pub_;
+  rclcpp::Publisher<vesc_msgs::msg::VescStateStamped>::SharedPtr state_pub_;
   rclcpp::Node *node_;
 };
 
