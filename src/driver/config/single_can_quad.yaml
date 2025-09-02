@@ -1,4 +1,4 @@
-vesc_driver_node:
+/**:
   ros__parameters:
     can_interfaces:
       - name: can0
