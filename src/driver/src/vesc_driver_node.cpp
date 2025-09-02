@@ -31,18 +31,16 @@ VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
             std::string interface_name = interface["name"];
             int baudrate = std::stoi(interface["baudrate"].get<std::string>());
 
-            auto vesc_ids_str = interface["vesc_ids"].get<std::vector<std::string>>();
-            std::vector<uint8_t> vesc_ids;
-            for (const auto& id_str : vesc_ids_str) {
-                vesc_ids.push_back(static_cast<uint8_t>(std::stoi(id_str)));
-            }
+            auto vesc_ids = interface["vesc_ids"].get<std::vector<json>>();
+            for (const auto& vesc_info : vesc_ids) {
+                uint8_t id = static_cast<uint8_t>(std::stoi(vesc_info["id"].get<std::string>()));
+                std::string label = vesc_info["label"].get<std::string>();
 
-            RCLCPP_INFO(this->get_logger(), "Configuring CAN interface: %s (%d baud)", interface_name.c_str(), baudrate);
+                RCLCPP_INFO(this->get_logger(), "Configuring CAN interface: %s (%d baud), VESC ID: %d, Label: %s",
+                            interface_name.c_str(), baudrate, id, label.c_str());
 
-            // Добавляем VESC в менеджер
-            for (uint8_t id : vesc_ids) {
-                vesc_manager_->addVesc(interface_name, id);
-                RCLCPP_INFO(this->get_logger(), "Added VESC ID %d on %s", id, interface_name.c_str());
+                // Добавляем VESC в менеджер
+                vesc_manager_->addVesc(interface_name, id, label);
             }
         }
     } catch (const std::exception& e) {
