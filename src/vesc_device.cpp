@@ -13,7 +13,7 @@ void VescDevice::sendDutyCycle(float duty)
     RCLCPP_INFO(node_->get_logger(), "VESC %d: set duty %.2f", id_, duty);
 }
 
-void VescDevice::updateState(const vesc_nexus::msg::VescState &state)
+void VescDevice::updateState(const vesc_msgs::msg::VescState &state)
 {
     auto msg = std::make_shared<vesc_msgs::msg::VescStateStamped>();
     msg->header.stamp = node_->now();

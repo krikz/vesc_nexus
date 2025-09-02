@@ -3,14 +3,14 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <memory>
-#include <vesc_msgs/msg/vesc_state_stamped.hpp>
+#include <vesc_msgs/VescStateStamped.h>
 
 class VescDevice
 {
 public:
   VescDevice(uint8_t id, const std::string &can_interface, rclcpp::Node *node);
   void sendDutyCycle(float duty);
-  void updateState(const vesc_nexus::msg::VescState &state);
+  void updateState(const vesc_msgs::msg::VescState &state);
 
 private:
   uint8_t id_;
