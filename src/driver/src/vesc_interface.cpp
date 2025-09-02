@@ -28,7 +28,7 @@
 
 // -*- mode:c++; fill-column: 100; -*-
 
-#include "vesc_driver/vesc_interface.hpp"
+#include "driver/vesc_interface.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -41,7 +41,7 @@
 #include <thread>
 #include <vector>
 
-#include "vesc_driver/vesc_packet_factory.hpp"
+#include "driver/vesc_packet_factory.hpp"
 #include "serial_driver/serial_driver.hpp"
 
 namespace vesc_driver

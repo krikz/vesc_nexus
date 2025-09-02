@@ -43,8 +43,8 @@
 #include <memory>
 #include <string>
 
-#include "vesc_driver/vesc_interface.hpp"
-#include "vesc_driver/vesc_packet.hpp"
+#include "driver/vesc_interface.hpp"
+#include "driver/vesc_packet.hpp"
 
 namespace vesc_driver_lifecycle
 {

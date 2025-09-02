@@ -38,7 +38,7 @@
 #include <utility>
 
 #define CRCPP_USE_CPP11
-#include "vesc_driver/crc.hpp"
+#include "driver/crc.hpp"
 
 namespace vesc_driver
 {

@@ -28,7 +28,7 @@
 
 // -*- mode:c++; fill-column: 100; -*-
 
-#include "vesc_driver/vesc_driver.hpp"
+#include "driver/vesc_driver.hpp"
 
 #include <std_msgs/msg/vesc_state.hpp>
 #include <std_msgs/msg/vesc_state_stamped.hpp>

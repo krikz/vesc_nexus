@@ -28,7 +28,7 @@
 
 // -*- mode:c++; fill-column: 100; -*-
 
-#include "vesc_driver/vesc_packet.hpp"
+#include "driver/vesc_packet.hpp"
 
 #include <cassert>
 #include <iterator>
@@ -36,8 +36,8 @@
 #include <string>
 #include <cmath>
 
-#include "vesc_driver/datatypes.hpp"
-#include "vesc_driver/vesc_packet_factory.hpp"
+#include "driver/datatypes.hpp"
+#include "driver/vesc_packet_factory.hpp"
 
 
 namespace vesc_driver

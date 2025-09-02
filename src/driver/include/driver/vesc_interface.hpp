@@ -31,7 +31,7 @@
 #ifndef VESC_DRIVER__VESC_INTERFACE_HPP_
 #define VESC_DRIVER__VESC_INTERFACE_HPP_
 
-#include "vesc_driver/vesc_packet.hpp"
+#include "driver/vesc_packet.hpp"
 
 #include <exception>
 #include <functional>

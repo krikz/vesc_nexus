@@ -32,7 +32,7 @@
 // modify. The author provides no guarantee of bug fixes, updates, or continued support.
 
 
-#include "vesc_driver/vesc_driver_lifecycle.hpp"
+#include "driver/vesc_driver_lifecycle.hpp"
 #include <rclcpp_lifecycle/state.hpp>
 #include <rclcpp_lifecycle/transition.hpp>
 

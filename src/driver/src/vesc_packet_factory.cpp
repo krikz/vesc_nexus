@@ -28,8 +28,8 @@
 
 // -*- mode:c++; fill-column: 100; -*-
 
-#include "vesc_driver/vesc_packet.hpp"
-#include "vesc_driver/vesc_packet_factory.hpp"
+#include "driver/vesc_packet.hpp"
+#include "driver/vesc_packet_factory.hpp"
 
 #include <cassert>
 #include <iterator>
