@@ -30,6 +30,19 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 target_link_libraries(${PROJECT_NAME}
   ${CMAKE_THREAD_LIBS_INIT}
 )
+
+# Executables
+add_executable(vesc_driver_node_exe src/vesc_driver_node.cpp)
+ament_target_dependencies(vesc_driver_node_exe
+  rclcpp
+  std_msgs
+  diagnostic_msgs
+  geometry_msgs
+  vesc_msgs
+)
+target_link_libraries(vesc_driver_node_exe
+  ${PROJECT_NAME}
+)
 rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN vesc_driver::VescDriver
   EXECUTABLE ${PROJECT_NAME}_node
