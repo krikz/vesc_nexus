@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vesc_msgs</name>
-  <version>0.1.0</version>
-  <description>ROS 2 messages for VESC telemetry</description>
+  <version>1.1.0</version>
+  <description>
+    ROS 2 message definitions for the Vedder VESC open source motor controller.
+  </description>
 
   <maintainer email="you@example.com">Your Name</maintainer>
   <license>MIT</license>
