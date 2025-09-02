@@ -2,7 +2,6 @@
 
 #include <net/if.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
@@ -16,6 +15,11 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <cstring>    // Для strncpy
+#include <unistd.h>   // Для close, read, write
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include "driver/vesc_packet_factory.hpp"
 
@@ -93,14 +97,35 @@ void VescInterface::Impl::packet_creation_thread() {
         struct can_frame frame;
         int bytes_read = read(can_socket_, &frame, sizeof(struct can_frame));
         if (bytes_read > 0) {
-            // Обработка CAN-сообщения
-            std::string error;
-            VescPacketConstPtr packet =
-                VescPacketFactory::createPacketFromCAN(frame, &error);
-            if (packet) {
-                packet_handler_(packet);
-            } else {
-                error_handler_(error);
+            // Извлекаем ID сообщения (удаляем флаги)
+            uint32_t can_id = frame.can_id & CAN_EFF_MASK;
+            
+            // Проверяем, является ли это сообщение от VESC
+            // В оригинальном коде UART используется ID 0x00 для команд
+            if (can_id >= 0x00 && can_id <= 0xFF) {
+                // Преобразуем CAN-фрейм в буфер для обработки
+                std::vector<uint8_t> buffer;
+                buffer.reserve(frame.can_dlc + 2); // +2 для префикса
+                
+                // Добавляем префикс, как в UART (SOF и длина)
+                buffer.push_back(VescFrame::VESC_SOF_VAL_SMALL_FRAME);
+                buffer.push_back(frame.can_dlc);
+                
+                // Добавляем данные из CAN-фрейма
+                buffer.insert(buffer.end(), frame.data, frame.data + frame.can_dlc);
+                
+                // Теперь используем существующий метод createPacket
+                int bytes_needed = VescFrame::VESC_MIN_FRAME_SIZE;
+                std::string error;
+                auto iter = buffer.begin();
+                VescPacketConstPtr packet = VescPacketFactory::createPacket(
+                    iter, buffer.end(), &bytes_needed, &error);
+                
+                if (packet) {
+                    packet_handler_(packet);
+                } else if (!error.empty()) {
+                    error_handler_(error);
+                }
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));

@@ -67,7 +67,7 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
   // attempt to connect to the serial port
   try {
     vesc_.connect(port);
-  } catch (SerialException e) {
+  } catch (const std::exception &e) {
     RCLCPP_FATAL(get_logger(), "Failed to connect to the VESC, %s.", e.what());
     rclcpp::shutdown();
     return;

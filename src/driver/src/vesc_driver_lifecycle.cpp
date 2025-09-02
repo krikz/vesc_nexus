@@ -81,7 +81,7 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
   std::string port = get_parameter("port").as_string();
   try {
     vesc_.connect(port);
-  } catch (vesc_driver::SerialException e) {
+  } catch (const std::exception &e) {
     RCLCPP_FATAL(get_logger(), "Failed to connect to the VESC: %s", e.what());
     return LifecycleCallbackReturn::FAILURE;
   }
