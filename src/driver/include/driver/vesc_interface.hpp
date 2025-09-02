@@ -17,7 +17,6 @@ public:
     using ErrorHandlerFunction = std::function<void(const std::string &)>;
 
     VescInterface(
-        const std::string &can_interface,
         const PacketHandlerFunction &packet_handler,
         const ErrorHandlerFunction &error_handler);
 

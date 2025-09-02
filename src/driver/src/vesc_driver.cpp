@@ -48,7 +48,6 @@ using vesc_msgs::msg::VescStateStamped;
 VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 : rclcpp::Node("vesc_driver", options),
   vesc_(
-    std::string(),
     std::bind(&VescDriver::vescPacketCallback, this, _1),
     std::bind(&VescDriver::vescErrorCallback, this, _1)),
   duty_cycle_limit_(this, "duty_cycle", -1.0, 1.0),
