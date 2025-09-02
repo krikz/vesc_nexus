@@ -41,7 +41,14 @@ void CanInterface::startListening(std::function<void(const can_frame &)> callbac
     }).detach();
 }
 
-void CanInterface::sendFrame(const can_frame &frame)
-{
-    write(socket_, &frame, sizeof(frame));
+void CanInterface::sendFrame(const can_frame& frame) {
+    ssize_t bytes_written = write(socket_, &frame, sizeof(frame));
+    if (bytes_written < 0) {
+        // Обработка ошибки
+        std::cerr << "Failed to write CAN frame: " << std::strerror(errno) << std::endl;
+        // Можно выбросить исключение или завершить программу
+    } else if (static_cast<size_t>(bytes_written) != sizeof(frame)) {
+        std::cerr << "Incomplete write: wrote " << bytes_written
+                  << " bytes out of " << sizeof(frame) << std::endl;
+    }
 }
