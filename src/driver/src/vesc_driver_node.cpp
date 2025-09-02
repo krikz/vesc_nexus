@@ -1,6 +1,6 @@
-#include "driver/vesc_nexus_node.hpp"
+#include "driver/vesc_driver_node.hpp"
 
-VescNexusNode::VescNexusNode() : Node("vesc_nexus_node")
+VescNexusNode::VescNexusNode() : Node("vesc_driver_node")
 {
     RCLCPP_INFO(this->get_logger(), "VescNexusNode started.");
 

@@ -47,7 +47,7 @@ publish_rate: 50.0
 ## Запуск
 
 ```bash
-ros2 launch vesc_nexus vesc_nexus_node.launch.py
+ros2 launch vesc_nexus vesc_driver_node.launch.py
 ```
 
 ## Требования

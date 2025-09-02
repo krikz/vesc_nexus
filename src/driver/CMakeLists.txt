@@ -21,7 +21,7 @@ find_package(Threads)
 
 # node library
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/vesc_nexus_node.cpp
+  src/vesc_driver_node.cpp
   src/can_interface.cpp
   src/vesc_manager.cpp
   src/vesc_device.cpp

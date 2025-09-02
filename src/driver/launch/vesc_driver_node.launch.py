@@ -22,8 +22,8 @@ def generate_launch_description():
         config_arg,
         Node(
             package='vesc_driver',
-            executable='vesc_nexus_node',
-            name='vesc_nexus_node',
+            executable='vesc_driver_node',
+            name='vesc_driver_node',
             parameters=[config],
             output='screen',
             emulate_tty=True,
