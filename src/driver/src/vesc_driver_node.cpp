@@ -1,31 +1,37 @@
 #include "driver/vesc_driver_node.hpp"
 #include <stdexcept>
+#include <nlohmann/json.hpp> // Библиотека для работы с JSON
+
+// Удобный алиас для JSON
+using json = nlohmann::json;
 
 VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
-    : Node("vesc_driver_node", modifyNodeOptions(options))
+    : Node("vesc_driver_node", options)
 {
     RCLCPP_INFO(this->get_logger(), "VescNexusNode started.");
+
+    // Объявляем параметры
+    this->declare_parameter<std::string>("can_interfaces_json", "[]");
+    this->declare_parameter<double>("publish_rate", 100.0);
 
     // Инициализируем менеджер VESC
     vesc_manager_ = std::make_unique<VescManager>(this);
 
-    // Читаем параметры из YAML-файла
     try {
-        // Получаем массив интерфейсов
-        std::map<std::string, rclcpp::Parameter> can_interfaces;
-        this->get_parameters("can_interfaces", can_interfaces);
+        // Читаем JSON-строку из параметров
+        std::string can_interfaces_json = this->get_parameter("can_interfaces_json").as_string();
+        double publish_rate = this->get_parameter("publish_rate").as_double();
 
-        //auto can_interfaces = this->get_parameter("can_interfaces").as_string_array();
+        RCLCPP_INFO(this->get_logger(), "Publish rate: %f", publish_rate);
 
-        for (size_t i = 0; i < can_interfaces.size(); ++i) {
-            std::string base_key = "can_interfaces." + std::to_string(i);
+        // Десериализуем JSON-строку
+        auto can_interfaces = json::parse(can_interfaces_json);
 
-            // Читаем параметры для каждого интерфейса
-            std::string interface_name = this->get_parameter(base_key + ".name").as_string();
-            std::string baudrate_str = this->get_parameter(base_key + ".baudrate").as_string();
-            int baudrate = std::stoi(baudrate_str);
+        for (const auto& interface : can_interfaces) {
+            std::string interface_name = interface["name"];
+            int baudrate = std::stoi(interface["baudrate"].get<std::string>());
 
-            auto vesc_ids_str = this->get_parameter(base_key + ".vesc_ids").as_string_array();
+            auto vesc_ids_str = interface["vesc_ids"].get<std::vector<std::string>>();
             std::vector<uint8_t> vesc_ids;
             for (const auto& id_str : vesc_ids_str) {
                 vesc_ids.push_back(static_cast<uint8_t>(std::stoi(id_str)));
@@ -46,13 +52,6 @@ VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
 
     // Запускаем менеджер VESC
     vesc_manager_->start();
-}
-
-// Вспомогательная функция для модификации NodeOptions
-rclcpp::NodeOptions VescNexusNode::modifyNodeOptions(const rclcpp::NodeOptions& options) {
-    rclcpp::NodeOptions modified_options = options;
-    modified_options.allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
-    return modified_options;
 }
 
 #include "rclcpp_components/register_node_macro.hpp"
