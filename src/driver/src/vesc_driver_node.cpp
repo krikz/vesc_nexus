@@ -48,4 +48,6 @@ VescNexusNode::VescNexusNode() : Node("vesc_driver_node")
     vesc_manager_->start();
 }
 
+#include "rclcpp_components/register_node_macro.hpp"
+
 RCLCPP_COMPONENTS_REGISTER_NODE(VescNexusNode)
