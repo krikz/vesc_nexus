@@ -54,7 +54,6 @@ using vesc_msgs::msg::VescStateStamped;
 VescDriverLifecycle::VescDriverLifecycle(const rclcpp::NodeOptions & options)
 : rclcpp_lifecycle::LifecycleNode("vesc_driver_lifecycle", options),
   vesc_(
-    std::string(),
     std::bind(&VescDriverLifecycle::vescPacketCallback, this, _1),
     std::bind(&VescDriverLifecycle::vescErrorCallback, this, _1)),
   duty_cycle_limit_(this, "duty_cycle", -1.0, 1.0),
@@ -84,7 +83,7 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
   }
   try {
-    //vesc_.connect(can_interface);
+    vesc_.connect(can_interface);
   } catch (const std::runtime_error &e) {
     RCLCPP_FATAL(get_logger(), "Failed to connect to the VESC: %s", e.what());
     return LifecycleCallbackReturn::FAILURE;

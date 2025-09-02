@@ -134,13 +134,12 @@ void VescInterface::Impl::packet_creation_thread() {
 }
 
 VescInterface::VescInterface(
-    const std::string &can_interface,
     const PacketHandlerFunction &packet_handler,
     const ErrorHandlerFunction &error_handler)
     : impl_(new Impl()) {
     setPacketHandler(packet_handler);
     setErrorHandler(error_handler);
-    connect(can_interface);
+    //connect(can_interface);
 }
 
 VescInterface::~VescInterface() {
