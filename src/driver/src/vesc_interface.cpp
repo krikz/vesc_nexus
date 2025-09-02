@@ -175,12 +175,24 @@ void VescInterface::send(const VescPacket &packet) {
     // Получаем данные пакета
     const auto& frame_data = packet.frame();
     
+    // Логируем информацию о пакете
+    RCLCPP_INFO(rclcpp::get_logger("VescInterface"), "Sending VESC packet with ID: %d, data length: %zu", 
+                packet.vesc_id, frame_data.size());
+    
+    // Проверяем, что сокет открыт
+    if (impl_->can_socket_ < 0) {
+        RCLCPP_ERROR(rclcpp::get_logger("VescInterface"), "CAN socket is not open");
+        throw std::runtime_error("CAN socket is not open");
+    }
+    
     // Создаем CAN-фрейм
     struct can_frame can_frame;
     std::memset(&can_frame, 0, sizeof(can_frame));
     
-    // Устанавливаем CAN ID (0x00 для команд)
-    can_frame.can_id = 0x00;
+    // Устанавливаем CAN ID (используем ID VESC)
+    // Для VESC используется расширенный формат ID (29 бит)
+    can_frame.can_id = (packet.vesc_id << 8) | 0x00; // Формат ID для VESC
+    can_frame.can_id |= CAN_EFF_FLAG; // Устанавливаем флаг расширенного формата
     
     // Копируем данные (пропуская префикс UART)
     // В UART-пакете первые 2 байта - SOF и длина
@@ -188,10 +200,39 @@ void VescInterface::send(const VescPacket &packet) {
     std::memcpy(can_frame.data, frame_data.data() + 2, data_length);
     can_frame.can_dlc = data_length;
     
-    // Отправляем CAN-фрейм
-    if (write(impl_->can_socket_, &can_frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
-        throw std::runtime_error("Failed to send CAN frame");
+    // Логируем CAN-фрейм
+    std::ostringstream oss;
+    oss << "CAN frame: ID=0x" << std::hex << can_frame.can_id << ", DLC=" << std::dec << can_frame.can_dlc << ", Data=";
+    for (size_t i = 0; i < data_length; ++i) {
+        oss << std::hex << (int)can_frame.data[i] << " ";
     }
+    RCLCPP_DEBUG(rclcpp::get_logger("VescInterface"), "%s", oss.str().c_str());
+    
+    // Отправляем CAN-фрейм
+    int bytes_sent = write(impl_->can_socket_, &can_frame, sizeof(struct can_frame));
+    if (bytes_sent != sizeof(struct can_frame)) {
+        int error = errno;
+        std::string error_msg = "Failed to send CAN frame: " + std::string(strerror(error)) + 
+                              " (errno=" + std::to_string(error) + ")";
+        RCLCPP_ERROR(rclcpp::get_logger("VescInterface"), "%s", error_msg.c_str());
+        
+        // Дополнительная информация для отладки
+        RCLCPP_ERROR(rclcpp::get_logger("VescInterface"), "Bytes sent: %d, expected: %zu", 
+                    bytes_sent, sizeof(struct can_frame));
+        
+        // Проверяем состояние сокета
+        int sock_error = 0;
+        socklen_t len = sizeof(sock_error);
+        getsockopt(impl_->can_socket_, SOL_SOCKET, SO_ERROR, &sock_error, &len);
+        if (sock_error) {
+            RCLCPP_ERROR(rclcpp::get_logger("VescInterface"), "Socket error: %s (errno=%d)", 
+                        strerror(sock_error), sock_error);
+        }
+        
+        throw std::runtime_error(error_msg);
+    }
+    
+    RCLCPP_DEBUG(rclcpp::get_logger("VescInterface"), "CAN frame sent successfully");
 }
 
 void VescInterface::requestFWVersion() {
