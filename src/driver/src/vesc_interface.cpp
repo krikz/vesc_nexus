@@ -20,6 +20,7 @@
 #include <unistd.h>   // Для close, read, write
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include "driver/vesc_packet_factory.hpp"
 
