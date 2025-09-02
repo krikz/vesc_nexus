@@ -33,8 +33,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
-#include <std_msgs/msg/vesc_state.hpp>
-#include <std_msgs/msg/vesc_state_stamped.hpp>
+#include <vesc_msgs/msg/vesc_state.hpp>
+#include <vesc_msgs/msg/vesc_state_stamped.hpp>
 #include <experimental/optional>
 #include <memory>
 #include <string>

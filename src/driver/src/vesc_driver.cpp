@@ -30,9 +30,6 @@
 
 #include "driver/vesc_driver.hpp"
 
-#include <std_msgs/msg/vesc_state.hpp>
-#include <std_msgs/msg/vesc_state_stamped.hpp>
-
 #include <cassert>
 #include <chrono>
 #include <cmath>
