@@ -31,26 +31,14 @@ target_link_libraries(${PROJECT_NAME}
   ${CMAKE_THREAD_LIBS_INIT}
 )
 
-# Executables
-add_executable(vesc_driver_node src/vesc_driver_node.cpp)
-ament_target_dependencies(vesc_driver_node
-  rclcpp
-  std_msgs
-  diagnostic_msgs
-  geometry_msgs
-  vesc_msgs
-)
-target_link_libraries(vesc_driver_node
-  ${PROJECT_NAME}
-)
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN vesc_driver::VescDriver
+  PLUGIN vesc_driver::VescNexusNode
   EXECUTABLE ${PROJECT_NAME}_node
 )
-rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN vesc_driver_lifecycle::VescDriverLifecycle
-  EXECUTABLE ${PROJECT_NAME}_lc_node
-)
+#rclcpp_components_register_node(${PROJECT_NAME}
+#  PLUGIN vesc_driver_lifecycle::VescDriverLifecycle
+#  EXECUTABLE ${PROJECT_NAME}_lc_node
+#)
 
 #############
 ## Testing ##
