@@ -22,8 +22,8 @@ def generate_launch_description():
             ),
         Node(
             package='vesc_driver',
-            executable='vesc_driver_node',
-            name='vesc_driver_node',
+            executable='sfsdfsdfdsfdsfdsfdfsd',
+            name='zxczczczcc',
             parameters=[LaunchConfiguration("config")]
         ),
 
