@@ -20,6 +20,13 @@ def launch_setup(context):
     config_path_str = config_path_subst.perform(context)
     logger.info(f"Resolved configuration file path: {config_path_str}")
 
+    # Читаем содержимое файла
+    with open(config_path_str, 'r') as file:
+        config_content = file.read()
+    
+    # Логируем содержимое файла
+    logger.info(f"Configuration file content:\n{config_content}")
+    
     # Создаем описание параметров
     file_parameters = ParameterFile(
         param_file=config_path_subst,
