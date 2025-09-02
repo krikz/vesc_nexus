@@ -1,12 +1,10 @@
 #include "driver/vesc_driver_node.hpp"
 #include <stdexcept>
 
-rclcpp::NodeOptions options;
-options.allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
-
 VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
     : Node("vesc_driver_node", options)
 {
+    options.allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
     RCLCPP_INFO(this->get_logger(), "VescNexusNode started.");
 
     // Инициализируем менеджер VESC
