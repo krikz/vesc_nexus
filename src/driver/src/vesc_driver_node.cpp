@@ -12,7 +12,10 @@ VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
     // Читаем параметры из YAML-файла
     try {
         // Получаем массив интерфейсов
-        auto can_interfaces = this->get_parameter("can_interfaces").as_string_array();
+        std::map<std::string, rclcpp::Parameter> can_interfaces;
+        this->get_parameters("can_interfaces", can_interfaces);
+
+        //auto can_interfaces = this->get_parameter("can_interfaces").as_string_array();
 
         for (size_t i = 0; i < can_interfaces.size(); ++i) {
             std::string base_key = "can_interfaces." + std::to_string(i);
