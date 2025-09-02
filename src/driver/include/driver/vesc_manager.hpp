@@ -10,7 +10,7 @@ class VescManager
 {
 public:
   VescManager(rclcpp::Node *node);
-  void addVesc(const std::string &can_if, uint8_t vesc_id);
+  void addVesc(const std::string& interface_name, uint8_t id, const std::string& label);
   void start();
 
 private:
