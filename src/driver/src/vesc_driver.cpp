@@ -62,7 +62,7 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
   fw_version_minor_(-1)
 {
   // get vesc serial port address
-  std::string port = declare_parameter<std::string>("port", "/dev/ttyACM0");
+  std::string port = declare_parameter<std::string>("can_interface", "can777");
 
   // attempt to connect to the serial port
   try {
