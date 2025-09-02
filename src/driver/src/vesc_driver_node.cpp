@@ -49,7 +49,7 @@ VescNexusNode::VescNexusNode(const rclcpp::NodeOptions& options)
     }
 
     // Запускаем менеджер VESC
-    vesc_manager_->start();
+    //vesc_manager_->start();
 }
 
 #include "rclcpp_components/register_node_macro.hpp"
