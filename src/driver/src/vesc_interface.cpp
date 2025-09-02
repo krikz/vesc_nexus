@@ -101,7 +101,6 @@ void VescInterface::Impl::packet_creation_thread() {
             uint32_t can_id = frame.can_id & CAN_EFF_MASK;
             
             // Проверяем, является ли это сообщение от VESC
-            // В оригинальном коде UART используется ID 0x00 для команд
             if (can_id >= 0x00 && can_id <= 0xFF) {
                 // Преобразуем CAN-фрейм в буфер для обработки
                 std::vector<uint8_t> buffer;
@@ -172,8 +171,24 @@ bool VescInterface::isConnected() const {
 }
 
 void VescInterface::send(const VescPacket &packet) {
-    struct can_frame frame = packet.toCANFrame();
-    if (write(impl_->can_socket_, &frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
+    // Получаем данные пакета
+    const auto& frame_data = packet.frame();
+    
+    // Создаем CAN-фрейм
+    struct can_frame can_frame;
+    std::memset(&can_frame, 0, sizeof(can_frame));
+    
+    // Устанавливаем CAN ID (0x00 для команд)
+    can_frame.can_id = 0x00;
+    
+    // Копируем данные (пропуская префикс UART)
+    // В UART-пакете первые 2 байта - SOF и длина
+    size_t data_length = std::min<size_t>(frame_data.size() - 2, 8);
+    std::memcpy(can_frame.data, frame_data.data() + 2, data_length);
+    can_frame.can_dlc = data_length;
+    
+    // Отправляем CAN-фрейм
+    if (write(impl_->can_socket_, &can_frame, sizeof(struct can_frame)) != sizeof(struct can_frame)) {
         throw std::runtime_error("Failed to send CAN frame");
     }
 }
