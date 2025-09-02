@@ -10,12 +10,15 @@ elseif("${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}" STREQUAL "98")
   set(CMAKE_CXX_STANDARD 14)
 endif()
 
-# Find dependencies
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
-find_package(Threads REQUIRED)
+# Найти зависимости
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(vesc_msgs REQUIRED)
 
-# Sources
+# Исходники
 set(SOURCES
   src/vesc_nexus_node.cpp
   src/can_interface.cpp
@@ -24,37 +27,37 @@ set(SOURCES
   src/packet_handler.cpp
 )
 
-# Library
-ament_auto_add_library(${PROJECT_NAME} SHARED ${SOURCES})
-target_include_directories(${PROJECT_NAME} PUBLIC include)
-ament_target_dependencies(${PROJECT_NAME}
-  rclcpp
-  std_msgs
-  diagnostic_msgs
-  geometry_msgs
-  vesc_msgs
-)
-target_link_libraries(${PROJECT_NAME} Threads::Threads)
-
-# Executable
-ament_auto_add_executable(${PROJECT_NAME}_node src/vesc_nexus_node.cpp)
-ament_target_dependencies(${PROJECT_NAME}_node
-  rclcpp
-  std_msgs
-  diagnostic_msgs
-  geometry_msgs
-  vesc_msgs
+# Создаём библиотеку
+add_library(vesc_nexus_core SHARED ${SOURCES})
+target_include_directories(vesc_nexus_core PUBLIC include)
+ament_target_dependencies(vesc_nexus_core
+  "rclcpp"
+  "std_msgs"
+  "diagnostic_msgs"
+  "geometry_msgs"
 )
 
-# Install files
-ament_auto_package(
-  INSTALL_TO_SHARE
-    launch
-    config
+# Создаём исполняемый файл
+add_executable(vesc_nexus_node src/vesc_nexus_node.cpp)
+target_include_directories(vesc_nexus_node PUBLIC include)
+ament_target_dependencies(vesc_nexus_node
+  "rclcpp"
+  "std_msgs"
+  "diagnostic_msgs"
+  "geometry_msgs"
 )
 
-# Testing
+# Линковка библиотеки
+target_link_libraries(vesc_nexus_core
+  vesc_msgs__rosidl_typesupport_c
+  vesc_msgs__rosidl_typesupport_cpp
+)
+
+# Тесты
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
+  find_package(ament_lint_auto REQUIRED) 
   ament_lint_auto_find_test_dependencies()
 endif()
+
+# Обязательно в конце
+ament_package()
