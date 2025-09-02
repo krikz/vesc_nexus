@@ -84,7 +84,7 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
   }
   try {
-    vesc_.connect(can_interface);
+    //vesc_.connect(can_interface);
   } catch (const std::runtime_error &e) {
     RCLCPP_FATAL(get_logger(), "Failed to connect to the VESC: %s", e.what());
     return LifecycleCallbackReturn::FAILURE;
