@@ -63,7 +63,7 @@ void VescInterface::Impl::connect(const std::string &can_interface) {
   if (ioctl(can_socket_, SIOCGIFINDEX, &ifr) < 0) {
       int error = errno;
       close(can_socket_);
-      throw std::runtime_error("Failed to get CAN interface index for " + can_interface.c_str() + 
+      throw std::runtime_error("Failed to get CAN interface index for " + can_interface + 
                             ": " + strerror(error));
   }
 

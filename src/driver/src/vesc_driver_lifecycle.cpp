@@ -78,10 +78,14 @@ LifecycleCallbackReturn VescDriverLifecycle::on_configure(
   RCLCPP_INFO(get_logger(), "Configuring node...");
 
   // Get VESC serial port address
-  std::string port = get_parameter("can_interface").as_string();
+  std::string can_interface = get_parameter("can_interface").as_string();
+  if (can_interface.empty()) {
+    RCLCPP_FATAL(get_logger(), "Parameter 'can_interface' is empty. Please set it in your configuration file.");
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::FAILURE;
+  }
   try {
-    vesc_.connect(port);
-  } catch (const std::exception &e) {
+    vesc_.connect(can_interface);
+  } catch (const std::runtime_error &e) {
     RCLCPP_FATAL(get_logger(), "Failed to connect to the VESC: %s", e.what());
     return LifecycleCallbackReturn::FAILURE;
   }
