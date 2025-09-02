@@ -49,9 +49,12 @@ VescNexusNode::VescNexusNode() : Node("vesc_driver_node")
 }
 
 int main(int argc, char *argv[])
-{
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<VescNexusNode>());
-    rclcpp::shutdown();
+{    
+    RCLCPP_INFO(this->get_logger(), "rclcpp::init(argc, argv); ");
+    rclcpp::init(argc, argv);    
+    RCLCPP_INFO(this->get_logger(), "rclcpp::spin(std::make_shared<VescNexusNode>());");
+    rclcpp::spin(std::make_shared<VescNexusNode>());    
+    RCLCPP_INFO(this->get_logger(), "rclcpp::shutdown();");
+    rclcpp::shutdown();    
     return 0;
 }
