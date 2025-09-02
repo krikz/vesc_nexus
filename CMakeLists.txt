@@ -12,6 +12,7 @@ find_package(std_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(vesc_msgs REQUIRED)
 
 # Исходники
 set(SOURCES
