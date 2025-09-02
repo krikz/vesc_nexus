@@ -22,7 +22,7 @@ COPY . src/vesc_nexus
 # Сборка пакета
 RUN . /opt/ros/humble/setup.sh && \
     colcon build \
-    --packages-select vesc_nexus \
+    --packages-select vesc_driver \
     --symlink-install \
     --cmake-args -DCMAKE_BUILD_TYPE=Release
 
