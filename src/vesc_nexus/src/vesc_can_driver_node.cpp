@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 
+using vesc_msgs::msg::VescState;
+using vesc_msgs::msg::VescStateStamped;
 class VescCanDriverNode : public rclcpp::Node {
 public:
     VescCanDriverNode(const rclcpp::NodeOptions & options)
@@ -65,7 +67,7 @@ public:
 
             // Установка callback на обновление состояния
             handler->setStateUpdateCallback([this, label = labels[i]](const auto& state) {
-                auto msg = vesc_msgs::msg::VescStateStamped();
+                auto msg = VescStateStamped();
                 msg.header.stamp = this->now();
                 msg.header.frame_id = label;
                 msg.state = state;
@@ -83,7 +85,7 @@ public:
 
         // Паблишеры для состояний
         for (const auto& label : labels) {
-            state_pubs_[label] = this->create_publisher<vesc_msgs::msg::VescStateStamped>(
+            state_pubs_[label] = this->create_publisher<VescStateStamped>(
                 "sensors/motor_state/" + label, 10);
         }
 
@@ -149,7 +151,7 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
-    std::map<std::string, rclcpp::Publisher<vesc_msgs::msg::VescStateStamped>::SharedPtr> state_pubs_;
+    std::map<std::string, rclcpp::Publisher<VescStateStamped>::SharedPtr> state_pubs_;
 };
 
 
