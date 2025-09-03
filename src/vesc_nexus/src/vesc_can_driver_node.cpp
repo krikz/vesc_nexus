@@ -9,7 +9,8 @@
 
 class VescCanDriverNode : public rclcpp::Node {
 public:
-    VescCanDriverNode() : Node("vesc_can_driver") {
+    VescCanDriverNode(const rclcpp::NodeOptions & options)
+            : rclcpp::Node("vesc_can_driver", options) {
         RCLCPP_INFO(this->get_logger(), "Initializing VESC Nexus CAN Driver Node...");
 
         // Загрузка параметров
