@@ -13,8 +13,7 @@ OdometryPublisher::OdometryPublisher(
       send_tf_func_(std::move(send_tf)),
       now_func_(std::move(now)),
       wheel_base_(wheel_base),
-      wheel_radius_(wheel_radius),
-      last_publish_time_(0)
+      wheel_radius_(wheel_radius)
 {
     odom_msg_.header.frame_id = "odom";
     odom_msg_.child_frame_id = "base_link";
@@ -23,6 +22,10 @@ OdometryPublisher::OdometryPublisher(
 }
 
 void OdometryPublisher::publish() {
+    if (last_publish_time_.nanoseconds() == 0) {
+        last_publish_time_ = now;
+        return;  // Пропустим первую итерацию (dt = 0)
+    }
     rclcpp::Time now = now_func_();
     double dt = (now - last_publish_time_).seconds();
     if (dt < 0.001) return;
