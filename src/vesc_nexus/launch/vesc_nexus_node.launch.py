@@ -13,7 +13,7 @@ logger = rclpy.logging.get_logger("vesc_nexus.launch")
 def launch_setup(context):
     # Создаем подстановку для пути к YAML-файлу
     config_path_subst = PathJoinSubstitution([
-        FindPackageShare('vesc_nexus'), 'config', 'single_can_quad.yaml'
+        FindPackageShare('vesc_nexus'), 'config', 'vesc_nexus_config.yaml'
     ])
 
     # Выполняем подстановку и получаем фактический путь
