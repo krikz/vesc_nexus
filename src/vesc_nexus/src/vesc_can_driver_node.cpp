@@ -95,19 +95,18 @@ public:
         }
 
         // Одометрия
+// Создай паблишеры заранее
+        odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 50);
+        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
+
+        // Теперь передай функции, которые уже используют созданные объекты
         odom_publisher_ = std::make_unique<OdometryPublisher>(
             vesc_ptrs_,
             [this](const nav_msgs::msg::Odometry& msg) {
-                if (!odom_pub_) {
-                    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 50);
-                }
-                odom_pub_->publish(msg);
+                odom_pub_->publish(msg);  // уже создан
             },
             [this](const geometry_msgs::msg::TransformStamped& tf) {
-                if (!tf_broadcaster_) {
-                    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
-                }
-                tf_broadcaster_->sendTransform(tf);
+                tf_broadcaster_->sendTransform(tf);  // уже создан
             },
             [this]() { return this->now(); },
             0.5,  // wheel_base
