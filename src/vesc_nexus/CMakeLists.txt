@@ -31,12 +31,8 @@ target_link_libraries(${PROJECT_NAME}
   ${CMAKE_THREAD_LIBS_INIT}
 )
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN vesc_nexus::VescDriver
+  PLUGIN VescCanDriverNode
   EXECUTABLE ${PROJECT_NAME}_node
-)
-rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN vesc_nexus_lifecycle::VescDriverLifecycle
-  EXECUTABLE ${PROJECT_NAME}_lc_node
 )
 
 #############
