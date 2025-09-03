@@ -23,7 +23,7 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
     if ((frame.can_id & 0xFF) != can_id_) return;
 
     if (frame.data[0] == 4) {  // COMM_GET_VALUES
-        parseValuesReply(frame, state_);
+        vesc_nexus::parseValuesReply(frame, state_);
         state_.label = label_;
 
         vesc_msgs::msg::VescStateStamped stamped;
@@ -72,7 +72,7 @@ void VescHandler::sendPosition(double pos) {
 
 void VescHandler::requestState() {
     if (send_can_func_) {
-        auto frame = createRequestValuesFrame(can_id_);
+        auto frame = vesc_nexus::createRequestValuesFrame(can_id_);
         send_can_func_(frame);
     }
 }
