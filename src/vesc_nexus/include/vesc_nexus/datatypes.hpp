@@ -54,7 +54,7 @@
 
 #include <cstdint>
 
-namespace vesc_driver
+namespace vesc_nexus
 {
 
 typedef struct
@@ -1065,5 +1065,5 @@ typedef struct
   float current_in_tot;
   uint8_t num_vescs;
 } setup_values;
-}  // namespace vesc_driver
+}  // namespace vesc_nexus
 #endif  // VESC_DRIVER__DATATYPES_HPP_

@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <package format="3">
-  <name>vesc_driver</name>
+  <name>vesc_nexus</name>
   <version>0.1.0</version>
   <description>
     Multi-CAN VESC driver for ROS 2. Supports multiple CAN interfaces and VESC IDs.
@@ -20,7 +20,9 @@
   <depend>geometry_msgs</depend>
   <depend>vesc_msgs</depend>
   <depend>serial_driver</depend>
+  <depend>tf2_ros</depend>
   <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

@@ -2,9 +2,9 @@
   ros__parameters:
     can_interface: "can0"
     can_baudrate: 500000
-    vesc_ids: [1, 2, 3, 4]
+    vesc_ids: [49, 124, 81, 94]
     wheel_labels: ["front_left", "front_right", "rear_left", "rear_right"]
-    publish_rate: 100.0
+    publish_rate: 5.0
     brake_max: 200000.0
     brake_min: -20000.0
     current_max: 10.0
