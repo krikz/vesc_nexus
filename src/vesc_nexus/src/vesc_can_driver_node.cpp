@@ -119,9 +119,28 @@ public:
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(static_cast<int>(1000.0 / publish_rate)),
             [this]() {
+                // 1. Публикуем одометрию
                 odom_publisher_->publish();
+
+                // 2. Опрашиваем состояние VESC
                 for (auto& handler : vesc_handlers_) {
                     handler->requestState();
+                }
+
+                // 3. Отправляем последнюю команду (если актуальна)
+                if (last_command_.valid) {
+                    auto now = this->now();
+                    auto dt = (now - last_command_.stamp).seconds();
+
+                    // Если команда старше 0.5 сек — обнуляем (остановка)
+                    if (dt > 0.5) {
+                        last_command_.valid = false;
+                        sendSpeedToWheels(0.0, 0.0);  // стоп
+                    } else {
+                        sendSpeedToWheels(last_command_.left_rpm, last_command_.right_rpm);
+                    }
+                } else {
+                    sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
                 }
             }
         );
@@ -138,6 +157,13 @@ public:
     }
 
 private:
+    // В private: секции узла
+    struct WheelSpeedCommand {
+        double left_rpm = 0.0;
+        double right_rpm = 0.0;
+        rclcpp::Time stamp;
+        bool valid = false;
+    } last_command_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     void handleCanFrame(const can_frame& frame) {
@@ -149,29 +175,46 @@ private:
             }
         }
     }
-
-    void onCmdVel(const geometry_msgs::msg::Twist::SharedPtr msg) {
-        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%.2f, angular.z=%.2f", 
-                    msg->linear.x, msg->angular.z);  // ✅ Добавь это!
-
-        double linear = msg->linear.x;
-        double angular = msg->angular.z;
-
-        double wheel_base = 0.5;
-        double left_speed = linear - angular * wheel_base / 2.0;
-        double right_speed = linear + angular * wheel_base / 2.0;
-
-        RCLCPP_INFO(this->get_logger(), "Left speed: %.2f m/s, Right speed: %.2f m/s", 
-                    left_speed, right_speed);
-
+    void sendSpeedToWheels(double left_rpm, double right_rpm) {
         for (auto& handler : vesc_handlers_) {
             std::string label = handler->getLabel();
             if (label.find("left") != std::string::npos) {
-                handler->sendSpeed(left_speed * 60.0 / (2.0 * M_PI * 0.1) * 7);  // RPM
+                handler->sendSpeed(left_rpm);
             } else if (label.find("right") != std::string::npos) {
-                handler->sendSpeed(right_speed * 60.0 / (2.0 * M_PI * 0.1) * 7);
+                handler->sendSpeed(right_rpm);
             }
         }
+    }
+
+    void onCmdVel(const geometry_msgs::msg::Twist::SharedPtr msg) {
+        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%.2f, angular.z=%.2f",
+                    msg->linear.x, msg->angular.z);
+
+        double linear = msg->linear.x;
+        double angular = msg->angular.z;
+        double wheel_base = 0.5;
+        double wheel_radius = 0.1;  // метры
+
+        // Переводим м/с → RPM
+        auto mps_to_rpm = [wheel_radius](double mps) {
+            double circumference = 2.0 * M_PI * wheel_radius;
+            double rps = mps / circumference;
+            return rps * 60.0;  // RPM
+        };
+
+        double left_mps = linear - angular * wheel_base / 2.0;
+        double right_mps = linear + angular * wheel_base / 2.0;
+
+        double left_rpm = mps_to_rpm(left_mps);
+        double right_rpm = mps_to_rpm(right_mps);
+
+        RCLCPP_INFO(this->get_logger(), "Left: %.2f RPM, Right: %.2f RPM", left_rpm, right_rpm);
+
+        // Сохраняем команду
+        last_command_.left_rpm = left_rpm;
+        last_command_.right_rpm = right_rpm;
+        last_command_.stamp = this->now();
+        last_command_.valid = true;
     }
 
     std::unique_ptr<CanInterface> can_interface_;
