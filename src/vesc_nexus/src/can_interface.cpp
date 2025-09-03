@@ -10,7 +10,6 @@
 #include <iostream>
 #include <cerrno>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp>
 
 CanInterface::CanInterface(const std::string& interface_name)
     : interface_name_(interface_name), socket_(-1), running_(false) {}
@@ -27,13 +26,13 @@ bool CanInterface::open() {
 
     socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (socket_ < 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Failed to create CAN socket");
+        RCLCPP_ERROR(get_logger("CanInterface"), "Failed to create CAN socket");
         return false;
     }
 
     std::strcpy(ifr.ifr_name, interface_name_.c_str());
     if (ioctl(socket_, SIOCGIFINDEX, &ifr) < 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Cannot find CAN interface: %s", interface_name_.c_str());
+        RCLCPP_ERROR(get_logger("CanInterface"), "Cannot find CAN interface: %s", interface_name_.c_str());
         ::close(socket_);
         socket_ = -1;
         return false;
@@ -43,7 +42,7 @@ bool CanInterface::open() {
     addr.can_ifindex = ifr.ifr_ifindex;
 
     if (::bind(socket_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Cannot bind to CAN socket");
+        RCLCPP_ERROR(get_logger("CanInterface"), "Cannot bind to CAN socket");
         ::close(socket_);
         socket_ = -1;
         return false;
@@ -52,7 +51,7 @@ bool CanInterface::open() {
     running_ = true;
     receive_thread_ = std::thread(&CanInterface::receiveLoop, this);
 
-    RCLCPP_INFO(rclcpp::get_logger("CanInterface"), "CAN interface %s opened successfully", interface_name_.c_str());
+    RCLCPP_INFO(get_logger("CanInterface"), "CAN interface %s opened successfully", interface_name_.c_str());
     return true;
 }
 
@@ -66,7 +65,7 @@ void CanInterface::close() {
             ::close(socket_);
             socket_ = -1;
         }
-        RCLCPP_INFO(rclcpp::get_logger("CanInterface"), "CAN interface closed");
+        RCLCPP_INFO(get_logger("CanInterface"), "CAN interface closed");
     }
 }
 
@@ -94,7 +93,7 @@ void CanInterface::receiveLoop() {
             callback_(frame);
         } else if (nbytes < 0) {
             if (errno != EAGAIN) {
-                RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Error reading CAN socket");
+                RCLCPP_ERROR(get_logger("CanInterface"), "Error reading CAN socket");
                 break;
             }
         }

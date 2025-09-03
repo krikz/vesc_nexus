@@ -1,6 +1,8 @@
 // odometry_publisher.cpp
 #include "vesc_nexus/odometry_publisher.hpp"
 #include <tf2/LinearMath/Quaternion.h>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 #include <cmath>
 
 OdometryPublisher::OdometryPublisher(rclcpp::Node::SharedPtr node,
