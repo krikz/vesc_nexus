@@ -14,7 +14,7 @@ OdometryPublisher::OdometryPublisher(
       now_func_(std::move(now)),
       wheel_base_(wheel_base),
       wheel_radius_(wheel_radius),
-      last_publish_time_(now())
+      last_publish_time_(0)
 {
     odom_msg_.header.frame_id = "odom";
     odom_msg_.child_frame_id = "base_link";
