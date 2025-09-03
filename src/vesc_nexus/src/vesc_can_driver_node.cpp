@@ -19,7 +19,7 @@ public:
         // Загрузка
         std::string can_if;
         this->get_parameter("can_interface", can_if);
-        std::vector<int> vesc_ids;
+        std::vector<int64_t> vesc_ids;
         this->get_parameter("vesc_ids", vesc_ids);
         std::vector<std::string> labels;
         this->get_parameter("wheel_labels", labels);
