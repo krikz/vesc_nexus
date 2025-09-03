@@ -161,7 +161,7 @@ private:
         double left_speed = linear - angular * wheel_base / 2.0;
         double right_speed = linear + angular * wheel_base / 2.0;
 
-        RCLCPP_DEBUG(this->get_logger(), "Left speed: %.2f m/s, Right speed: %.2f m/s", 
+        RCLCPP_INFO(this->get_logger(), "Left speed: %.2f m/s, Right speed: %.2f m/s", 
                     left_speed, right_speed);
 
         for (auto& handler : vesc_handlers_) {

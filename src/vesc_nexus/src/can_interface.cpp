@@ -69,12 +69,30 @@ void CanInterface::close() {
     }
 }
 
+// can_interface.cpp
 bool CanInterface::sendFrame(const struct can_frame& frame) {
     std::lock_guard<std::mutex> lock(socket_mutex_);
-    if (!running_ || socket_ < 0) return false;
+    if (!running_ || socket_ < 0) {
+        RCLCPP_WARN(rclcpp::get_logger("CanInterface"), "Attempted to send CAN frame, but interface is not running");
+        return false;
+    }
+
+    // 🔹 Логируем отправку CAN-фрейма
+    RCLCPP_INFO(rclcpp::get_logger("CanInterface"),
+                 "Sending CAN frame: ID=0x%X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+                 frame.can_id, frame.can_dlc,
+                 frame.data[0], frame.data[1], frame.data[2], frame.data[3],
+                 frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
 
     int nbytes = ::write(socket_, &frame, sizeof(struct can_frame));
-    return (nbytes == sizeof(struct can_frame));
+    if (nbytes != sizeof(struct can_frame)) {
+        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"),
+                     "Failed to send CAN frame: wrote %d bytes, expected %zu",
+                     nbytes, sizeof(struct can_frame));
+        return false;
+    }
+
+    return true;
 }
 
 void CanInterface::setReceiveCallback(CanFrameCallback cb) {
