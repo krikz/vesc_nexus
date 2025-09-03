@@ -5,6 +5,7 @@
 #include <vesc_msgs/msg/vesc_state.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <cstdint>
+#include <vesc_msgs/msg/vesc_state.hpp>
 
 namespace vesc_nexus {
 

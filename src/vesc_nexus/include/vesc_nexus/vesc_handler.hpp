@@ -5,7 +5,7 @@
 #include <functional>
 #include <string>
 #include "message_translator.hpp"
-#include "vesc_msgs/msg/vesc_state.hpp"
+#include <vesc_msgs/msg/vesc_state.hpp>
 
 class VescHandler {
 public:

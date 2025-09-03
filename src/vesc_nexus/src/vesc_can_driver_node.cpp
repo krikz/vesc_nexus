@@ -4,6 +4,8 @@
 #include "vesc_nexus/vesc_handler.hpp"
 #include "vesc_nexus/odometry_publisher.hpp"
 #include "vesc_nexus/message_translator.hpp"
+#include <vesc_msgs/msg/vesc_state.hpp>
+#include <vesc_msgs/msg/vesc_state_stamped.hpp>
 #include <memory>
 #include <vector>
 
