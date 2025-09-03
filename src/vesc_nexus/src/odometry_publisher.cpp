@@ -23,7 +23,7 @@ OdometryPublisher::OdometryPublisher(
 
 void OdometryPublisher::publish() {
     if (last_publish_time_.nanoseconds() == 0) {
-        last_publish_time_ = now;
+        last_publish_time_ = now_func_();
         return;  // Пропустим первую итерацию (dt = 0)
     }
     rclcpp::Time now = now_func_();
