@@ -33,7 +33,8 @@ void OdometryPublisher::publish() {
     bool found_left = false, found_right = false;
 
     for (auto* handler : vesc_handlers_) {
-        auto state = handler->getState();
+
+        auto state = handler->getLastState();
         std::string label = handler->getLabel();
         if (label.find("left") != std::string::npos) {
             left_rpm += state.speed_rpm;
