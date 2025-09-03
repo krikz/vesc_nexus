@@ -1,22 +1,21 @@
-// odometry_publisher.cpp
+// src/odometry_publisher.cpp
 #include "vesc_nexus/odometry_publisher.hpp"
-#include <tf2/LinearMath/Quaternion.h>
-#include <rclcpp/rclcpp.hpp>
-#include <tf2_ros/transform_broadcaster.h>
 #include <cmath>
 
-OdometryPublisher::OdometryPublisher(rclcpp::Node::SharedPtr node,
-                                   const std::vector<VescHandler*>& vesc_handlers,
-                                   double wheel_base, double wheel_radius)
-    : node_(node),
-      vesc_handlers_(vesc_handlers),
+OdometryPublisher::OdometryPublisher(
+    const std::vector<VescHandler*>& vesc_handlers,
+    PublishOdomFunc publish_odom,
+    SendTfFunc send_tf,
+    NowFunc now,
+    double wheel_base, double wheel_radius)
+    : vesc_handlers_(vesc_handlers),
+      publish_odom_func_(std::move(publish_odom)),
+      send_tf_func_(std::move(send_tf)),
+      now_func_(std::move(now)),
       wheel_base_(wheel_base),
       wheel_radius_(wheel_radius),
-      last_publish_time_(node->now())
+      last_publish_time_(now())
 {
-    odom_pub_ = node->create_publisher<nav_msgs::msg::Odometry>("odom", 50);
-    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node);
-
     odom_msg_.header.frame_id = "odom";
     odom_msg_.child_frame_id = "base_link";
     transform_stamped_.header.frame_id = "odom";
@@ -24,38 +23,36 @@ OdometryPublisher::OdometryPublisher(rclcpp::Node::SharedPtr node,
 }
 
 void OdometryPublisher::publish() {
-    rclcpp::Time now = node_->now();
+    rclcpp::Time now = now_func_();
     double dt = (now - last_publish_time_).seconds();
-    if (dt < 0.001) return;  // защита от слишком частых вызовов
+    if (dt < 0.001) return;
 
-    // Пример: предполагаем front_left и front_right как основные
     double left_rpm = 0.0, right_rpm = 0.0;
-    bool found_left = false, found_right = false;
+    int left_count = 0, right_count = 0;
 
     for (auto* handler : vesc_handlers_) {
-
         auto state = handler->getLastState();
         std::string label = handler->getLabel();
         if (label.find("left") != std::string::npos) {
             left_rpm += state.speed_rpm;
-            found_left = true;
+            ++left_count;
         }
         if (label.find("right") != std::string::npos) {
             right_rpm += state.speed_rpm;
-            found_right = true;
+            ++right_count;
         }
     }
 
-    if (!found_left || !found_right) {
-        RCLCPP_WARN_ONCE(node_->get_logger(), "Not enough wheels detected for odometry");
+    if (left_count == 0 || right_count == 0) {
+        RCLCPP_WARN_ONCE(rclcpp::get_logger("OdometryPublisher"), "Not enough wheels for odometry");
         return;
     }
 
-    // Среднее, если несколько колёс с одной стороны
-    left_rpm /= 2.0;
-    right_rpm /= 2.0;
+    // Усреднение
+    left_rpm /= left_count;
+    right_rpm /= right_count;
 
-    // RPM → угловая скорость колеса (rad/s)
+    // RPM → rad/s
     double left_w = (left_rpm * 2.0 * M_PI) / 60.0;
     double right_w = (right_rpm * 2.0 * M_PI) / 60.0;
 
@@ -63,7 +60,7 @@ void OdometryPublisher::publish() {
     double vx = (right_w + left_w) * wheel_radius_ / 2.0;
     double vtheta = (right_w - left_w) * wheel_radius_ / wheel_base_;
 
-    // Интегрируем положение
+    // Интегрируем
     double delta_x = vx * cos(theta_) * dt;
     double delta_y = vx * sin(theta_) * dt;
     double delta_theta = vtheta * dt;
@@ -89,7 +86,7 @@ void OdometryPublisher::publish() {
     odom_msg_.twist.twist.angular.z = vtheta;
 
     // Публикуем
-    odom_pub_->publish(odom_msg_);
+    publish_odom_func_(odom_msg_);
 
     // TF
     transform_stamped_.header.stamp = now;
@@ -100,12 +97,7 @@ void OdometryPublisher::publish() {
     transform_stamped_.transform.rotation.z = q.z();
     transform_stamped_.transform.rotation.w = q.w();
 
-    tf_broadcaster_->sendTransform(transform_stamped_);
+    send_tf_func_(transform_stamped_);
 
     last_publish_time_ = now;
-}
-
-void OdometryPublisher::setLinearAngularVelocity(double linear, double angular) {
-    vx_ = linear;
-    vtheta_ = angular;
 }

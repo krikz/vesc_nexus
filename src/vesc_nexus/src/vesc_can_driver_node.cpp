@@ -92,7 +92,24 @@ public:
         }
 
         // Одометрия
-        odom_publisher_ = std::make_unique<OdometryPublisher>(shared_from_this(), vesc_ptrs_);
+        odom_publisher_ = std::make_unique<OdometryPublisher>(
+            vesc_ptrs_,
+            [this](const nav_msgs::msg::Odometry& msg) {
+                if (!odom_pub_) {
+                    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 50);
+                }
+                odom_pub_->publish(msg);
+            },
+            [this](const geometry_msgs::msg::TransformStamped& tf) {
+                if (!tf_broadcaster_) {
+                    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
+                }
+                tf_broadcaster_->sendTransform(tf);
+            },
+            [this]() { return this->now(); },
+            0.5,  // wheel_base
+            0.1   // wheel_radius
+        );
         RCLCPP_INFO(this->get_logger(), "Odometry publisher initialized.");
 
         // Таймер
@@ -118,6 +135,8 @@ public:
     }
 
 private:
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     void handleCanFrame(const can_frame& frame) {
         uint8_t sender_id = frame.can_id & 0xFF;
         for (auto& handler : vesc_handlers_) {
