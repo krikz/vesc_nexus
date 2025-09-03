@@ -8,12 +8,12 @@ from launch_ros.substitutions import FindPackageShare
 import rclpy.logging
 
 # Создаем логгер для вывода отладочной информации
-logger = rclpy.logging.get_logger("vesc_driver.launch")
+logger = rclpy.logging.get_logger("vesc_nexus.launch")
 
 def launch_setup(context):
     # Создаем подстановку для пути к YAML-файлу
     config_path_subst = PathJoinSubstitution([
-        FindPackageShare('vesc_driver'), 'config', 'single_can_quad.yaml'
+        FindPackageShare('vesc_nexus'), 'config', 'single_can_quad.yaml'
     ])
 
     # Выполняем подстановку и получаем фактический путь
@@ -36,9 +36,9 @@ def launch_setup(context):
     # Возвращаем ноду с параметрами
     return [
         Node(
-            package='vesc_driver',
-            executable='vesc_driver_lc_node',
-            name='vesc_driver_lc_node',
+            package='vesc_nexus',
+            executable='vesc_nexus_node',
+            name='vesc_nexus_node',
             parameters=[file_parameters],
         )
     ]
