@@ -37,9 +37,13 @@ def launch_setup(context):
     return [
         Node(
             package='vesc_nexus',
-            executable='vesc_nexus_node',
-            name='vesc_nexus_node',
+            executable='vesc_can_driver_node',
+            name='vesc_can_driver',
             parameters=[file_parameters],
+            output='screen',
+            emulate_tty=True,  # Красивый вывод (цвета, логи в реальном времени)
+            respawn=True,      # Перезапуск при падении (опционально)
+            respawn_delay=2    # Задержка перед перезапуском
         )
     ]
 
