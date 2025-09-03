@@ -21,11 +21,11 @@ find_package(Threads)
 
 # node library
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  can/can_interface.cpp
-  can/message_translator.cpp
-  can/odometry_publisher.cpp
-  can/vesc_can_driver_node.cpp
-  can/vesc_handler.cpp
+  src/can_interface.cpp
+  src/message_translator.cpp
+  src/odometry_publisher.cpp
+  src/vesc_can_driver_node.cpp
+  src/vesc_handler.cpp
 )
 target_link_libraries(${PROJECT_NAME}
   ${CMAKE_THREAD_LIBS_INIT}
