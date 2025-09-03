@@ -9,6 +9,8 @@
 #include <cstring>
 #include <iostream>
 #include <cerrno>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp>
 
 CanInterface::CanInterface(const std::string& interface_name)
     : interface_name_(interface_name), socket_(-1), running_(false) {}
