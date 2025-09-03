@@ -151,6 +151,9 @@ private:
     }
 
     void onCmdVel(const geometry_msgs::msg::Twist::SharedPtr msg) {
+        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%.2f, angular.z=%.2f", 
+                    msg->linear.x, msg->angular.z);  // ✅ Добавь это!
+
         double linear = msg->linear.x;
         double angular = msg->angular.z;
 
@@ -158,10 +161,13 @@ private:
         double left_speed = linear - angular * wheel_base / 2.0;
         double right_speed = linear + angular * wheel_base / 2.0;
 
+        RCLCPP_DEBUG(this->get_logger(), "Left speed: %.2f m/s, Right speed: %.2f m/s", 
+                    left_speed, right_speed);
+
         for (auto& handler : vesc_handlers_) {
             std::string label = handler->getLabel();
             if (label.find("left") != std::string::npos) {
-                handler->sendSpeed(left_speed * 60.0 / (2.0 * M_PI * 0.1) * 7);  // RPM (пример)
+                handler->sendSpeed(left_speed * 60.0 / (2.0 * M_PI * 0.1) * 7);  // RPM
             } else if (label.find("right") != std::string::npos) {
                 handler->sendSpeed(right_speed * 60.0 / (2.0 * M_PI * 0.1) * 7);
             }
