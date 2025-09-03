@@ -20,6 +20,7 @@
   <depend>geometry_msgs</depend>
   <depend>vesc_msgs</depend>
   <depend>serial_driver</depend>
+  <depend>tf2_ros</depend>
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
 

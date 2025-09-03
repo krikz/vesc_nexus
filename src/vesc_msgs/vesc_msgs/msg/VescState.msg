@@ -39,3 +39,12 @@ float64 avg_vd
 float64 avg_vq
 
 #float64 temperature_pcb      # temperature of printed circuit board (degrees Celsius)
+
+string label
+float64 speed_rpm
+float64 erpm
+float64 power_w
+float64 temp_controller
+uint32 tachometer
+uint32 tachometer_abs
+bool alive
