@@ -6,6 +6,9 @@
 #include "vesc_nexus/message_translator.hpp"
 #include <vesc_msgs/msg/vesc_state.hpp>
 #include <vesc_msgs/msg/vesc_state_stamped.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 #include <memory>
 #include <vector>
 
