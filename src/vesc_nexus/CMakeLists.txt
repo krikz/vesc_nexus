@@ -32,7 +32,7 @@ target_link_libraries(${PROJECT_NAME}
 )
 rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN VescCanDriverNode
-  EXECUTABLE ${PROJECT_NAME}_node
+  EXECUTABLE vesc_can_driver_node
 )
 
 #############
