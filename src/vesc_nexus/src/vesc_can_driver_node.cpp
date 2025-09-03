@@ -103,7 +103,7 @@ public:
         odom_publisher_ = std::make_unique<OdometryPublisher>(
             vesc_ptrs_,
             [this](const nav_msgs::msg::Odometry& msg) {
-                odom_pub_->publish(msg);  // уже создан
+                //odom_pub_->publish(msg);  // уже создан
             },
             [this](const geometry_msgs::msg::TransformStamped& tf) {
                // tf_broadcaster_->sendTransform(tf);  // уже создан
