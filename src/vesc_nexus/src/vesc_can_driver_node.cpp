@@ -13,7 +13,6 @@ public:
             : rclcpp::Node("vesc_can_driver", options) {
         RCLCPP_INFO(this->get_logger(), "Initializing VESC Nexus CAN Driver Node...");
 
-        // Загрузка параметров
         this->declare_parameter("can_interface", "can0");
         this->declare_parameter("vesc_ids", std::vector<int64_t>{1, 2, 3, 4});
         this->declare_parameter("wheel_labels", std::vector<std::string>{"front_left", "front_right", "rear_left", "rear_right"});
@@ -28,26 +27,6 @@ public:
         double publish_rate;
         this->get_parameter("publish_rate", publish_rate);
 
-        RCLCPP_INFO(this->get_logger(), "Loaded parameters:");
-        RCLCPP_INFO(this->get_logger(), "  CAN interface: %s", can_if.c_str());
-        RCLCPP_INFO(this->get_logger(), "  VESC IDs: [%s]", [&]() {
-            std::string s;
-            for (size_t i = 0; i < vesc_ids.size(); ++i) {
-                s += std::to_string(vesc_ids[i]);
-                if (i != vesc_ids.size() - 1) s += ", ";
-            }
-            return s;
-        }().c_str());
-        RCLCPP_INFO(this->get_logger(), "  Wheel labels: [%s]", [&]() {
-            std::string s;
-            for (size_t i = 0; i < labels.size(); ++i) {
-                s += labels[i];
-                if (i != labels.size() - 1) s += ", ";
-            }
-            return s;
-        }().c_str());
-        RCLCPP_INFO(this->get_logger(), "  Publish rate: %.1f Hz", publish_rate);
-
         if (vesc_ids.size() != labels.size()) {
             RCLCPP_FATAL(this->get_logger(), "Mismatch: %zu vesc_ids but %zu wheel_labels!", vesc_ids.size(), labels.size());
             rclcpp::shutdown();
@@ -55,59 +34,61 @@ public:
         }
 
         // Инициализация CAN
-        RCLCPP_INFO(this->get_logger(), "Opening CAN interface: %s...", can_if.c_str());
         can_interface_ = std::make_unique<CanInterface>(can_if);
-
         can_interface_->setReceiveCallback([this](const auto& frame) {
             this->handleCanFrame(frame);
         });
 
         if (!can_interface_->open()) {
-            RCLCPP_FATAL(this->get_logger(), "Failed to open CAN interface %s. Is it up?", can_if.c_str());
-            RCLCPP_FATAL(this->get_logger(), "Run: sudo ip link set %s up type can bitrate 500000", can_if.c_str());
+            RCLCPP_FATAL(this->get_logger(), "Failed to open CAN interface %s", can_if.c_str());
             rclcpp::shutdown();
             return;
         }
         RCLCPP_INFO(this->get_logger(), "CAN interface %s opened successfully.", can_if.c_str());
 
-        // Параметры управления
+        // Параметры
         vesc_nexus::CommandLimits limits;
-        this->declare_parameter("duty_cycle_min", -0.5);
-        this->declare_parameter("duty_cycle_max", 0.5);
-        this->declare_parameter("current_min", 0.0);
-        this->declare_parameter("current_max", 10.0);
-        this->declare_parameter("speed_min", -23250.0);
-        this->declare_parameter("speed_max", 23250.0);
-        // ... при необходимости добавь остальные
-
-        this->get_parameter("duty_cycle_min", limits.duty_cycle_min);
-        this->get_parameter("duty_cycle_max", limits.duty_cycle_max);
-        this->get_parameter("current_min", limits.current_min);
-        this->get_parameter("current_max", limits.current_max);
-        this->get_parameter("speed_min", limits.speed_min);
-        this->get_parameter("speed_max", limits.speed_max);
+        // ... загрузи limits ...
 
         // Создание обработчиков
-        RCLCPP_INFO(this->get_logger(), "Creating %zu VESC handlers...", vesc_ids.size());
         for (size_t i = 0; i < vesc_ids.size(); ++i) {
             auto handler = std::make_shared<VescHandler>(
                 static_cast<uint8_t>(vesc_ids[i]),
                 labels[i],
-                shared_from_this(),
                 limits
             );
+
+            // Установка отправки CAN
             handler->setSendCanFunc([this](const auto& f) {
                 return can_interface_->sendFrame(f);
             });
+
+            // Установка callback на обновление состояния
+            handler->setStateUpdateCallback([this, label = labels[i]](const auto& state) {
+                auto msg = vesc_msgs::msg::VescStateStamped();
+                msg.header.stamp = this->now();
+                msg.header.frame_id = label;
+                msg.state = state;
+
+                auto it = state_pubs_.find(label);
+                if (it != state_pubs_.end()) {
+                    it->second->publish(msg);
+                }
+            });
+
             vesc_handlers_.push_back(handler);
             vesc_ptrs_.push_back(handler.get());
-            RCLCPP_INFO(this->get_logger(), "  VESC %d (%s) initialized", static_cast<int>(vesc_ids[i]), labels[i].c_str());
+            RCLCPP_INFO(this->get_logger(), "VESC %d (%s) initialized", static_cast<int>(vesc_ids[i]), labels[i].c_str());
+        }
+
+        // Паблишеры для состояний
+        for (const auto& label : labels) {
+            state_pubs_[label] = this->create_publisher<vesc_msgs::msg::VescStateStamped>(
+                "sensors/motor_state/" + label, 10);
         }
 
         // Одометрия
-        odom_publisher_ = std::make_unique<OdometryPublisher>(
-            shared_from_this(), vesc_ptrs_
-        );
+        odom_publisher_ = std::make_unique<OdometryPublisher>(shared_from_this(), vesc_ptrs_);
         RCLCPP_INFO(this->get_logger(), "Odometry publisher initialized.");
 
         // Таймер
@@ -116,20 +97,18 @@ public:
             [this]() {
                 odom_publisher_->publish();
                 for (auto& handler : vesc_handlers_) {
-                    handler->requestState();  // Опрос состояния
+                    handler->requestState();
                 }
             }
         );
-        RCLCPP_INFO(this->get_logger(), "Main timer started at %.1f Hz.", publish_rate);
 
-        // Подписка
+        // Подписка на cmd_vel
         cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
             "cmd_vel", 10,
             [this](const geometry_msgs::msg::Twist::SharedPtr msg) {
                 this->onCmdVel(msg);
             }
         );
-        RCLCPP_INFO(this->get_logger(), "Subscribed to /cmd_vel");
 
         RCLCPP_INFO(this->get_logger(), "✅ VESC Nexus Driver is READY and RUNNING.");
     }
@@ -169,6 +148,8 @@ private:
     std::unique_ptr<OdometryPublisher> odom_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+
+    std::map<std::string, rclcpp::Publisher<vesc_msgs::msg::VescStateStamped>::SharedPtr> state_pubs_;
 };
 
 
