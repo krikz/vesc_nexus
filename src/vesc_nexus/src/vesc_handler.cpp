@@ -26,23 +26,52 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
     uint8_t sender_id = frame.can_id & 0xFF;
     uint8_t command_id = (frame.can_id >> 8) & 0xFF;
 
-    if (!frame.can_id & CAN_EFF_FLAG) return;  // Только 29-bit
-    if (sender_id != can_id_) return;
+    // Логируем каждый пришедший фрейм (опционально — можно убрать в релизе)
+    RCLCPP_DEBUG_STREAM(this->get_logger(),
+        "[" << label_ << "] CAN RX: ID=0x" << std::hex << frame.can_id
+        << " CMD=" << std::dec << (int)command_id
+        << " DLC=" << (int)frame.can_dlc
+        << " Data=" << std::vector<uint8_t>(frame.data, frame.data + frame.can_dlc));
 
+    // Фильтр: только 29-битные фреймы (расширенный формат)
+    if (!(frame.can_id & CAN_EFF_FLAG)) {
+        RCLCPP_WARN_STREAM(this->get_logger(), "[" << label_ << "] Non-EFF frame received (ignored): ID=0x" << std::hex << frame.can_id);
+        return;
+    }
+
+    // Проверка ID
+    if (sender_id != can_id_) {
+        RCLCPP_DEBUG_STREAM(this->get_logger(),
+            "[" << label_ << "] Frame from wrong sender: expected=0x" << std::hex << (int)can_id_
+            << ", got=0x" << (int)sender_id);
+        return;
+    }
+
+    // Обработка пакетов статуса
     switch (command_id) {
-        case vesc_nexus::CAN_PACKET_STATUS:
+        case vesc_nexus::CAN_PACKET_STATUS: {
+            RCLCPP_INFO_STREAM(this->get_logger(), "[" << label_ << "] ✅ STATUS Packet received");
             vesc_nexus::parseStatusPacket(frame, last_state_);
             break;
-        case vesc_nexus::CAN_PACKET_STATUS_2:
+        }
+        case vesc_nexus::CAN_PACKET_STATUS_2: {
+            RCLCPP_INFO_STREAM(this->get_logger(), "[" << label_ << "] ✅ STATUS_2 Packet received");
             vesc_nexus::parseStatus2Packet(frame, last_state_);
             break;
-        case vesc_nexus::CAN_PACKET_STATUS_4:
+        }
+        case vesc_nexus::CAN_PACKET_STATUS_4: {
+            RCLCPP_INFO_STREAM(this->get_logger(), "[" << label_ << "] ✅ STATUS_4 Packet received");
             vesc_nexus::parseStatus4Packet(frame, last_state_);
             break;
-        case vesc_nexus::CAN_PACKET_STATUS_5:
+        }
+        case vesc_nexus::CAN_PACKET_STATUS_5: {
+            RCLCPP_INFO_STREAM(this->get_logger(), "[" << label_ << "] ✅ STATUS_5 Packet received");
             vesc_nexus::parseStatus5Packet(frame, last_state_);
             break;
+        }
         default:
+            RCLCPP_DEBUG_STREAM(this->get_logger(),
+                "[" << label_ << "] Unknown command ID: 0x" << std::hex << (int)command_id);
             return;
     }
 
