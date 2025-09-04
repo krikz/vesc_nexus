@@ -4,9 +4,12 @@ from launch_ros.descriptions import ParameterValue
 from launch.substitutions import Command
 from ament_index_python.packages import get_package_share_directory
 import os
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import FileContent, LaunchConfiguration, PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
-    urdf_path = os.path.join(get_package_share_directory('vesc_nexus'), 'urdf', 'robot.urdf.xacro')
+    urdf = FileContent(PathJoinSubstitution([FindPackageShare('vesc_nexus', 'robot.urdf.xacro')]))
     controller_config = os.path.join(get_package_share_directory('vesc_nexus'), 'config', 'robot_controller.yaml')
 
     return LaunchDescription([
@@ -15,8 +18,8 @@ def generate_launch_description():
             executable='robot_state_publisher',
             name='robot_state_publisher',
             output='screen',
-            parameters=[controller_config,{'robot_description': urdf_path}],
-            arguments=[urdf_path]),
+            parameters=[controller_config,{'robot_description': urdf}],
+            arguments=[urdf]),
         Node(
             package='controller_manager',
             executable='spawner',
