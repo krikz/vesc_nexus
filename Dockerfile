@@ -3,14 +3,19 @@ FROM introlab3it/rtabmap_ros:humble-latest
 
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libffi-dev \
-    python3-dev \
-    python3-pip \
-    can-utils \
-    iproute2 \
-    net-tools \
-    && rm -rf /var/lib/apt/lists/*
+  build-essential \
+  libffi-dev \
+  python3-dev \
+  python3-pip \
+  can-utils \
+  iproute2 \
+  net-tools \
+  ros-humble-ros2-control \
+  ros-humble-ros2-controllers \
+  ros-humble-controller-manager \
+  ros-humble-hardware-interface \
+  ros-humble-pluginlib \
+  && rm -rf /var/lib/apt/lists/*
 
 # Рабочая директория
 WORKDIR /ws
