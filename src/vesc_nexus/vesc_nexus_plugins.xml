@@ -1,0 +1,9 @@
+<library path="lib/libvesc_hardware_interface">
+  <class name="vesc_nexus/VescSystemHardwareInterface"
+         type="vesc_nexus::VescSystemHardwareInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Hardware interface for VESC-based robots over CAN bus.
+    </description>
+  </class>
+</library>

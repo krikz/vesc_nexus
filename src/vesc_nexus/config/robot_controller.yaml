@@ -1,50 +1,17 @@
 controller_manager:
   ros__parameters:
-    update_rate: 50  # Hz
-    # Список контроллеров
-    controller_names:
-      - diff_drive_controller
+    update_rate: 50
 
 diff_drive_controller:
   ros__parameters:
-    # Левые колёса
-    left_wheel_names:
-      - front_left_wheel
-      - rear_left_wheel
-
-    # Правые колёса
-    right_wheel_names:
-      - front_right_wheel
-      - rear_right_wheel
-
-    # Расстояние между левыми и правыми колёсами (в метрах)
+    left_wheel_names: ["front_left_wheel", "rear_left_wheel"]
+    right_wheel_names: ["front_right_wheel", "rear_right_wheel"]
     wheel_separation: 0.3
-
-    # Радиус колеса (в метрах)
     wheel_radius: 0.115
-
-    # Количество колёс с каждой стороны (для расчёта проскальзывания)
-    wheels_per_side: 2  # ВАЖНО: у вас по 2 колеса с каждой стороны
-
-    # Фреймы TF
+    wheels_per_side: 2
+    publish_rate: 50.0
     enable_odom_tf: true
     odom_frame_id: odom
     base_frame_id: base_link
-
-    # Частота публикации одометрии
-    publish_rate: 50.0
-
-    # Таймаут команды
     cmd_vel_timeout: 0.5
-
-    # Не использовать stamped Twist (проще)
     use_stamped_vel: false
-
-    # Лимиты (опционально)
-    linear.x.has_velocity_limits: true
-    linear.x.max_velocity: 2.0
-    linear.x.min_velocity: -2.0
-
-    angular.z.has_velocity_limits: true
-    angular.z.max_velocity: 3.0
-    angular.z.min_velocity: -3.0
