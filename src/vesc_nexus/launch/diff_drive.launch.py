@@ -18,6 +18,7 @@ def generate_launch_description():
         Node(
             package='controller_manager',
             executable='spawner',
+            parameters=[controller_config]
             arguments=['diff_drive_controller']
         ),
     ])
