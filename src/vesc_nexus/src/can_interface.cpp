@@ -86,10 +86,10 @@ bool CanInterface::sendFrame(const struct can_frame& frame) {
 
     int nbytes = ::write(socket_, &frame, sizeof(struct can_frame));
     if (nbytes != sizeof(struct can_frame)) {
-        int err = errno;
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"),
-                     "Failed to send CAN frame: write() returned %d, errno=%d (%s)",
-                     nbytes, err, strerror(err));
+        //int err = errno;
+        //RCLCPP_ERROR(rclcpp::get_logger("CanInterface"),
+        //             "Failed to send CAN frame: write() returned %d, errno=%d (%s)",
+        //             nbytes, err, strerror(err));
         return false;
     }
 
