@@ -78,11 +78,11 @@ bool CanInterface::sendFrame(const struct can_frame& frame) {
     }
 
     // 🔹 Логируем отправку CAN-фрейма
-    RCLCPP_INFO(rclcpp::get_logger("CanInterface"),
-                 "Sending CAN frame: ID=0x%X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
-                 frame.can_id, frame.can_dlc,
-                 frame.data[0], frame.data[1], frame.data[2], frame.data[3],
-                 frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
+    //RCLCPP_INFO(rclcpp::get_logger("CanInterface"),
+    //             "Sending CAN frame: ID=0x%X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+    //             frame.can_id, frame.can_dlc,
+    //             frame.data[0], frame.data[1], frame.data[2], frame.data[3],
+    //             frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
 
     int nbytes = ::write(socket_, &frame, sizeof(struct can_frame));
     if (nbytes != sizeof(struct can_frame)) {

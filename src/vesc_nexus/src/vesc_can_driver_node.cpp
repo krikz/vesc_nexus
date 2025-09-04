@@ -153,7 +153,7 @@ public:
                         sendSpeedToWheels(last_command_.left_mps, last_command_.right_mps);
                     }
                 } else {
-                    sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
+                    //sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
                 }
             }
         );
