@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
   ros-humble-hardware-interface \
   ros-humble-pluginlib \
   ros-humble-xacro \
+  ros-humble-robot-state-publisher \
   && rm -rf /var/lib/apt/lists/*
 
 # Рабочая директория
