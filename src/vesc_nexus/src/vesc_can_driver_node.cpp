@@ -135,12 +135,12 @@ public:
                     // Если команда старше 0.5 сек — обнуляем (остановка)
                     if (dt > 1) {
                         last_command_.valid = false;
-                        //sendSpeedToWheels(0.0, 0.0);  // стоп
+                        sendSpeedToWheels(0.0, 0.0);  // стоп
                     } else {
                         sendSpeedToWheels(last_command_.left_rpm, last_command_.right_rpm);
                     }
                 } else {
-                    //sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
+                    sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
                 }
             }
         );
