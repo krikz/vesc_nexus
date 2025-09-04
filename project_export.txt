@@ -1,0 +1,4359 @@
+# Экспорт проекта: vesc_nexus
+# Сгенерировано: export_project.py
+# Время: 2025-09-04T21:41:09.640834
+# Путь: D:\PROJECTS\vesc_nexus
+================================================================================
+
+# ----------------------------------------------------------------------------
+# Файл: Dockerfile
+# Путь: D:\PROJECTS\vesc_nexus\Dockerfile
+# ----------------------------------------------------------------------------
+# Используем базовый образ ROS 2 Humble (подходит для Raspberry Pi)
+FROM introlab3it/rtabmap_ros:humble-latest
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    python3-dev \
+    python3-pip \
+    can-utils \
+    iproute2 \
+    net-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Рабочая директория
+WORKDIR /ws
+RUN mkdir -p src
+
+# Копируем только ваш пакет vesc_nexus
+COPY . src/vesc_nexus
+
+# Сборка пакета
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build \
+    --symlink-install \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+# Добавляем setup.bash в окружение
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
+    echo "source /ws/install/setup.bash" >> /root/.bashrc
+
+# Настройка ROS 2
+ENV ROS_DOMAIN_ID=0
+ENV ROS_LOCALHOST_ONLY=0
+
+# Команда по умолчанию — запуск драйвера
+CMD ["bash", "-c", "source /ws/install/setup.bash && ros2 launch vesc_nexus vesc_nexus_node.launch.py"]
+
+# ----------------------------------------------------------------------------
+# Файл: README.md
+# Путь: D:\PROJECTS\vesc_nexus\README.md
+# ----------------------------------------------------------------------------
+# VESC Nexus — Multi-CAN VESC Driver for ROS 2
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![ROS 2](https://img.shields.io/badge/ROS-Humble-brightgreen)](https://docs.ros.org/en/humble/)
+
+**`vesc_nexus`** — это высокопроизводительный ROS 2-драйвер для управления **множеством VESC-регуляторов** по CAN-шине. Поддерживает до 4+ VESC на одном или нескольких CAN-интерфейсах, публикует состояние моторов и одометрию, принимает команды от `cmd_vel`.
+
+Идеально подходит для:
+- Роботов с дифференциальным приводом
+- Четырёхколёсных платформ
+- Проектов на Raspberry Pi, Jetson, x86
+
+## 🚀 Основные возможности
+
+- ✅ Управление **несколькими VESC** по CAN (ID: 1–254)
+- ✅ Поддержка **нескольких CAN-интерфейсов** (`can0`, `can1`, ...)
+- ✅ Приём команд от `/cmd_vel` → преобразование в RPM
+- ✅ Публикация состояния каждого мотора: RPM, ток, температура, напряжение
+- ✅ Расчёт и публикация `/odom` (одометрия)
+- ✅ Гибкая конфигурация через YAML
+- ✅ Запуск в Docker (включая Raspberry Pi)
+- ✅ Поддержка ROS 2 Humble/Iron
+
+## 📦 Установка
+
+### 1. Клонирование
+
+```bash
+cd ~/ros2_ws/src
+git clone https://github.com/your-org/vesc_nexus.git
+```
+
+### 2. Установка зависимостей
+
+```bash
+cd ~/ros2_ws
+rosdep install --from-paths src --ignore-src -r -y
+```
+
+### 3. Сборка
+
+```bash
+colcon build --packages-select vesc_nexus vesc_msgs
+source install/setup.bash
+```
+
+## ⚙️ Конфигурация
+
+Настройка производится через `config/vesc_nexus_config.yaml`.
+
+Пример для 4 VESC на `can0`:
+
+```yaml
+/**:
+  ros__parameters:
+    can_interface: "can0"
+    vesc_ids: [49, 124, 81, 94]
+    wheel_labels: ["front_left", "front_right", "rear_left", "rear_right"]
+    publish_rate: 50.0
+    speed_max: 23250.0
+    speed_min: -23250.0
+    current_max: 10.0
+    brake_max: 200000.0
+    brake_min: -20000.0
+    servo_min: 0.15
+    servo_max: 0.85
+```
+
+> 🔔 Убедитесь, что VESC прошиты с поддержкой CAN и имеют соответствующие ID.
+
+## ▶️ Запуск
+
+### 1. Поднимите CAN-интерфейс
+
+```bash
+sudo ip link set can0 up type can bitrate 500000
+```
+
+### 2. Запустите драйвер
+
+```bash
+ros2 launch vesc_nexus vesc_nexus_node.launch.py
+```
+
+## 📡 Топики
+
+### Публикуемые топики
+
+| Топик | Тип | Описание |
+|-------|-----|--------|
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | Принимает команды движения |
+| `/odom` | `nav_msgs/msg/Odometry` | Публикует одометрию робота |
+| `/sensors/motor_state/<label>` | `vesc_msgs/msg/VescStateStamped` | Состояние каждого мотора (RPM, ток, температура) |
+| `/tf` | `tf2_msgs/msg/TFMessage` | Публикует преобразование `odom → base_link` |
+
+### Пример: чтение состояния мотора
+
+```bash
+ros2 topic echo /sensors/motor_state/front_left
+```
+
+## 🐳 Запуск в Docker
+
+### Сборка образа
+
+```bash
+docker build -t vesc_nexus .
+```
+
+### Запуск с доступом к CAN
+
+```bash
+docker run -it \
+  --network=host \
+  --cap-add=NET_ADMIN \
+  --device=/dev/socketcan \
+  --name vesc-nexus \
+  --rm \
+  vesc_nexus:latest
+```
+
+## 🔧 Диагностика
+
+### Проверка CAN-трафика
+
+```bash
+# Просмотр всех CAN-фреймов
+candump can0
+
+# Отправка тестовой команды (например, запрос состояния VESC с ID 49)
+cansend can0 031#04
+```
+
+### Проверка подключения узла
+
+```bash
+# Список узлов
+ros2 node list
+
+# Информация о подписках
+ros2 node info /vesc_can_driver
+```
+
+## 🧪 Тестирование управления
+
+### Движение вперёд и поворот
+
+```bash
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
+  "{linear: {x: 0.5}, angular: {z: 0.3}}"
+```
+
+### Остановка
+
+```bash
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{}"
+```
+
+## ⚠️ Распространённые проблемы
+
+| Проблема | Решение |
+|--------|--------|
+| `errno=105 (No buffer space available)` | Нет терминатора 120 Ом, VESC не подключены, `can0` не поднят |
+| Нет ответов от VESC | Проверьте CAN_H/CAN_L, питание, ID, прошивку |
+| Не публикуются данные | Убедитесь, что `cmd_vel` отправляется, и `publish_rate > 0` |
+| `bad_weak_ptr` при старте | Убедитесь, что `shared_from_this()` не вызывается в конструкторе |
+
+## 📁 Структура проекта
+
+```
+vesc_nexus/
+├── config/
+│   └── vesc_nexus_config.yaml
+├── launch/
+│   └── vesc_nexus_node.launch.py
+├── src/
+│   ├── can_interface.cpp
+│   ├── vesc_can_driver_node.cpp
+│   ├── vesc_handler.cpp
+│   ├── message_translator.cpp
+│   └── odometry_publisher.cpp
+├── include/vesc_nexus/
+│   ├── can_interface.hpp
+│   ├── vesc_handler.hpp
+│   ├── message_translator.hpp
+│   └── odometry_publisher.hpp
+└── Dockerfile
+```
+
+## 📄 Лицензия
+
+MIT
+
+---
+
+> Поддержка: [vesc.org](https://vesc.org/) | [GitHub: vedderb/bldc](https://github.com/vedderb/bldc)
+
+# ----------------------------------------------------------------------------
+# Файл: project_export.txt
+# Путь: D:\PROJECTS\vesc_nexus\project_export.txt
+# ----------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------
+# Файл: .github\workflows\docker-image.yml
+# Путь: D:\PROJECTS\vesc_nexus\.github\workflows\docker-image.yml
+# ----------------------------------------------------------------------------
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile --tag vesc_nexus:$(date +%s)
+
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_msgs\CMakeLists.txt
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_msgs\CMakeLists.txt
+# ----------------------------------------------------------------------------
+cmake_minimum_required(VERSION 3.8)
+project(vesc_msgs)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/VescState.msg"
+  "msg/VescStateStamped.msg"
+  DEPENDENCIES
+    std_msgs
+)
+
+ament_export_dependencies(rosidl_default_runtime)
+ament_package()
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_msgs\package.xml
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_msgs\package.xml
+# ----------------------------------------------------------------------------
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>vesc_msgs</name>
+  <version>1.1.0</version>
+  <description>
+    ROS 2 message definitions for the Vedder VESC open source motor controller.
+  </description>
+
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>std_msgs</build_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_msgs\msg\VescState.msg
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_msgs\msg\VescState.msg
+# ----------------------------------------------------------------------------
+# Vedder VESC open source motor controller state (telemetry)
+
+# fault codes
+int32 FAULT_CODE_NONE=0
+int32 FAULT_CODE_OVER_VOLTAGE=1
+int32 FAULT_CODE_UNDER_VOLTAGE=2
+int32 FAULT_CODE_DRV8302=3
+int32 FAULT_CODE_ABS_OVER_CURRENT=4
+int32 FAULT_CODE_OVER_TEMP_FET=5
+int32 FAULT_CODE_OVER_TEMP_MOTOR=6
+
+# follow the bledc firwmare: commands.c
+float64 temp_fet             # fet temperature 
+float64 temp_motor           # motor temperature
+float64 current_motor        # motor current (ampere) avg_motor_current
+float64 current_input        # input current (ampere) avg_input_current          
+float64 avg_id
+float64 avg_iq
+float64 duty_cycle           # duty cycle (0 to 1) duty_cycle_now
+float64 speed                # motor electrical speed (revolutions per minute) rpm
+
+float64 voltage_input        # input voltage (volt)
+float64 charge_drawn         # electric charge drawn from input (ampere-hours)
+float64 charge_regen         # electric charge regenerated to input (ampere-hour) amp_hours_charged    
+float64 energy_drawn         # energy drawn from input (watt-hour)
+float64 energy_regen         # energy regenerated to input (watt_hours_charged)
+int32   displacement         # net tachometer (counts) tachometer
+int32   distance_traveled    # total tachnometer (counts) tachometer_abs
+int32   fault_code
+
+float64 pid_pos_now
+int32 controller_id
+
+
+float64 ntc_temp_mos1
+float64 ntc_temp_mos2
+float64 ntc_temp_mos3
+float64 avg_vd
+float64 avg_vq
+
+#float64 temperature_pcb      # temperature of printed circuit board (degrees Celsius)
+
+string label
+float64 speed_rpm
+float64 erpm
+float64 power_w
+float64 temp_controller
+uint32 tachometer
+uint32 tachometer_abs
+bool alive
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_msgs\msg\VescStateStamped.msg
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_msgs\msg\VescStateStamped.msg
+# ----------------------------------------------------------------------------
+# Copied from the ROS1 VESC controller open-source repository.
+# Timestamped VESC open source motor controller state (telemetry)
+
+std_msgs/Header  header
+VescState state
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\CMakeLists.txt
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\CMakeLists.txt
+# ----------------------------------------------------------------------------
+cmake_minimum_required(VERSION 3.8)
+project(vesc_nexus)
+
+# Set minimum C++ standard to C++14
+if(NOT "${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}")
+  message(STATUS "Changing CXX_STANDARD from C++98 to C++14")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+elseif("${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}" STREQUAL "98")
+  message(STATUS "Changing CXX_STANDARD from C++98 to C++14")
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+# Find dependencies
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
+find_package(Threads)
+
+###########
+## Build ##
+###########
+
+# node library
+ament_auto_add_library(${PROJECT_NAME} SHARED
+  src/can_interface.cpp
+  src/message_translator.cpp
+  src/odometry_publisher.cpp
+  src/vesc_can_driver_node.cpp
+  src/vesc_handler.cpp
+)
+target_link_libraries(${PROJECT_NAME}
+  ${CMAKE_THREAD_LIBS_INIT}
+)
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN VescCanDriverNode
+  EXECUTABLE vesc_can_driver_node
+)
+
+#############
+## Testing ##
+#############
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_auto_package(
+  INSTALL_TO_SHARE
+    launch
+    config
+)
+
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\package.xml
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\package.xml
+# ----------------------------------------------------------------------------
+<?xml version='1.0' encoding='utf-8'?>
+<package format="3">
+  <name>vesc_nexus</name>
+  <version>0.1.0</version>
+  <description>
+    Multi-CAN VESC driver for ROS 2. Supports multiple CAN interfaces and VESC IDs.
+  </description>
+
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>std_msgs</depend>  
+  <depend>diagnostic_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>vesc_msgs</depend>
+  <depend>serial_driver</depend>
+  <depend>tf2_ros</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\config\vesc_nexus_config.yaml
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\config\vesc_nexus_config.yaml
+# ----------------------------------------------------------------------------
+/**:
+  ros__parameters:
+    can_interface: "can0"
+    can_baudrate: 500000
+    vesc_ids: [49, 124, 81, 94]
+    wheel_labels: ["front_left", "front_right", "rear_left", "rear_right"]
+    wheel_radii: [0.115, 0.115, 0.115, 0.115]       # радиус в метрах
+    wheel_poles: [30, 30, 30, 30]                  # количество полюсов (магнитов)
+    wheel_abs_min_erpm: [900, 900, 900, 900]       # минимальный ERPM для движения
+    wheel_base: 0.3                                # расстояние между передней и задней осью (м)
+    publish_rate: 50.0
+    speed_max: 23250.0
+    speed_min: -23250.0
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\include\vesc_nexus\can_interface.hpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\include\vesc_nexus\can_interface.hpp
+# ----------------------------------------------------------------------------
+// can_interface.hpp
+#pragma once
+
+#include <linux/can.h>
+#include <string>
+#include <functional>
+#include <thread>
+#include <atomic>
+#include <mutex>
+
+class CanInterface {
+public:
+    using CanFrameCallback = std::function<void(const struct can_frame&)>;
+
+    explicit CanInterface(const std::string& interface_name);
+    ~CanInterface();
+
+    bool open();
+    void close();
+    bool sendFrame(const struct can_frame& frame);
+    void setReceiveCallback(CanFrameCallback cb);
+    bool isRunning() const;
+
+private:
+    std::string interface_name_;
+    int socket_;
+    std::atomic<bool> running_;
+    CanFrameCallback callback_;
+    std::thread receive_thread_;
+    mutable std::mutex socket_mutex_;
+
+    void receiveLoop();
+};
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\include\vesc_nexus\crc.hpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\include\vesc_nexus\crc.hpp
+# ----------------------------------------------------------------------------
+// Copyright (c) 2020, Daniel Bahr
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+//   * Redistributions of source code must retain the above copyright
+//     notice, this list of conditions and the following disclaimer.
+//
+//   * Redistributions in binary form must reproduce the above copyright
+//     notice, this list of conditions and the following disclaimer in the
+//     documentation and/or other materials provided with the distribution.
+//
+//   * Neither the name of the {copyright_holder} nor the names of its
+//     contributors may be used to endorse or promote products derived from
+//     this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+
+/**
+    @file CRC.hpp
+    @author Daniel Bahr
+    @version 1.0.1.0
+    @copyright
+*/
+
+/*
+    CRC++ can be configured by setting various #defines before #including this header file:
+
+        #define crcpp_uint8                             - Specifies the type used to store CRCs that have a width of 8 bits or less.
+                                                          This type is not used in CRC calculations. Defaults to ::std::uint8_t.
+        #define crcpp_uint16                            - Specifies the type used to store CRCs that have a width between 9 and 16 bits (inclusive).
+                                                          This type is not used in CRC calculations. Defaults to ::std::uint16_t.
+        #define crcpp_uint32                            - Specifies the type used to store CRCs that have a width between 17 and 32 bits (inclusive).
+                                                          This type is not used in CRC calculations. Defaults to ::std::uint32_t.
+        #define crcpp_uint64                            - Specifies the type used to store CRCs that have a width between 33 and 64 bits (inclusive).
+                                                          This type is not used in CRC calculations. Defaults to ::std::uint64_t.
+        #define crcpp_size                              - This type is used for loop iteration and function signatures only. Defaults to ::std::size_t.
+        #define CRCPP_USE_NAMESPACE                     - Define to place all CRC++ code within the ::CRCPP namespace.
+        #define CRCPP_BRANCHLESS                        - Define to enable a branchless CRC implementation. The branchless implementation uses a single integer
+                                                          multiplication in the bit-by-bit calculation instead of a small conditional. The branchless implementation
+                                                          may be faster on processor architectures which support single-instruction integer multiplication.
+        #define CRCPP_USE_CPP11                         - Define to enables C++11 features (move semantics, constexpr, static_assert, etc.).
+        #define CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS  - Define to include definitions for little-used CRCs.
+*/
+
+#ifndef VESC_DRIVER__CRC_HPP_
+#define VESC_DRIVER__CRC_HPP_
+
+#include <climits>   // Includes CHAR_BIT
+#ifdef CRCPP_USE_CPP11
+#include <cstddef>   // Includes ::std::size_t
+#include <cstdint>   // Includes ::std::uint8_t, ::std::uint16_t, ::std::uint32_t, ::std::uint64_t
+#else
+#include <stddef.h>  // Includes size_t
+#include <stdint.h>  // Includes uint8_t, uint16_t, uint32_t, uint64_t
+#endif
+#include <limits>    // Includes ::std::numeric_limits
+#include <utility>   // Includes ::std::move
+
+#ifndef crcpp_uint8
+#   ifdef CRCPP_USE_CPP11
+/// @brief Unsigned 8-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint8 ::std::uint8_t
+#   else
+/// @brief Unsigned 8-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint8 uint8_t
+#   endif
+#endif
+
+#ifndef crcpp_uint16
+#   ifdef CRCPP_USE_CPP11
+/// @brief Unsigned 16-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint16 ::std::uint16_t
+#   else
+/// @brief Unsigned 16-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint16 uint16_t
+#   endif
+#endif
+
+#ifndef crcpp_uint32
+#   ifdef CRCPP_USE_CPP11
+/// @brief Unsigned 32-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint32 ::std::uint32_t
+#   else
+/// @brief Unsigned 32-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint32 uint32_t
+#   endif
+#endif
+
+#ifndef crcpp_uint64
+#   ifdef CRCPP_USE_CPP11
+/// @brief Unsigned 64-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint64 ::std::uint64_t
+#   else
+/// @brief Unsigned 64-bit integer definition, used primarily for parameter definitions.
+#       define crcpp_uint64 uint64_t
+#   endif
+#endif
+
+#ifndef crcpp_size
+#   ifdef CRCPP_USE_CPP11
+/// @brief Unsigned size definition, used for specifying data sizes.
+#       define crcpp_size ::std::size_t
+#   else
+/// @brief Unsigned size definition, used for specifying data sizes.
+#       define crcpp_size size_t
+#   endif
+#endif
+
+#ifdef CRCPP_USE_CPP11
+/// @brief Compile-time expression definition.
+#   define crcpp_constexpr constexpr
+#else
+/// @brief Compile-time expression definition.
+#   define crcpp_constexpr const
+#endif
+
+#ifdef CRCPP_USE_NAMESPACE
+namespace CRCPP
+{
+#endif
+
+/**
+    @brief Static class for computing CRCs.
+    @note This class supports computation of full and multi-part CRCs, using a bit-by-bit algorithm or a
+        byte-by-byte lookup table. The CRCs are calculated using as many optimizations as is reasonable.
+        If compiling with C++11, the constexpr keyword is used liberally so that many calculations are
+        performed at compile-time instead of at runtime.
+*/
+class CRC
+{
+public:
+  // Forward declaration
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  struct Table;
+
+  /**
+      @brief CRC parameters.
+  */
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  struct Parameters
+  {
+    CRCType polynomial;       ///< CRC polynomial
+    CRCType initialValue;     ///< Initial CRC value
+    CRCType finalXOR;         ///< Value to XOR with the final CRC
+    bool reflectInput;        ///< true to reflect all input bytes
+    bool reflectOutput;       ///< true to reflect the output CRC (reflection occurs before the final XOR)  // NOLINT
+
+    Table<CRCType, CRCWidth> MakeTable() const;
+  };
+
+  /**
+      @brief CRC lookup table. After construction, the CRC parameters are fixed.
+      @note A CRC table can be used for multiple CRC calculations.
+  */
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  struct Table
+  {
+    // Constructors are intentionally NOT marked explicit.
+    explicit Table(const Parameters<CRCType, CRCWidth> & parameters);
+
+#ifdef CRCPP_USE_CPP11
+    explicit Table(Parameters<CRCType, CRCWidth> && parameters);
+#endif
+
+    const Parameters<CRCType, CRCWidth> & GetParameters() const;
+
+    const CRCType * GetTable() const;
+
+    CRCType operator[](unsigned char index) const;
+
+private:
+    void InitTable();
+
+    Parameters<CRCType, CRCWidth> parameters;     ///< CRC parameters used to construct the table
+    CRCType table[1 << CHAR_BIT];                 ///< CRC lookup table
+  };
+
+  // The number of bits in CRCType must be at least as large as CRCWidth.
+  // CRCType must be an unsigned integer type or a custom type with operator overloads.
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType Calculate(
+    const void * data, crcpp_size size, const Parameters<CRCType,
+    CRCWidth> & parameters);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType Calculate(
+    const void * data, crcpp_size size, const Parameters<CRCType,
+    CRCWidth> & parameters, CRCType crc);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType Calculate(
+    const void * data, crcpp_size size, const Table<CRCType,
+    CRCWidth> & lookupTable);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType Calculate(
+    const void * data, crcpp_size size, const Table<CRCType,
+    CRCWidth> & lookupTable, CRCType crc);
+
+  // Common CRCs up to 64 bits.
+  // Note: Check values are the computed CRCs when given an ASCII input of "123456789"
+  // (without null terminator)
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint8, 4> & CRC_4_ITU();
+  static const Parameters<crcpp_uint8, 5> & CRC_5_EPC();
+  static const Parameters<crcpp_uint8, 5> & CRC_5_ITU();
+  static const Parameters<crcpp_uint8, 5> & CRC_5_USB();
+  static const Parameters<crcpp_uint8, 6> & CRC_6_CDMA2000A();
+  static const Parameters<crcpp_uint8, 6> & CRC_6_CDMA2000B();
+  static const Parameters<crcpp_uint8, 6> & CRC_6_ITU();
+  static const Parameters<crcpp_uint8, 7> & CRC_7();
+#endif
+  static const Parameters<crcpp_uint8, 8> & CRC_8();
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint8, 8> & CRC_8_EBU();
+  static const Parameters<crcpp_uint8, 8> & CRC_8_MAXIM();
+  static const Parameters<crcpp_uint8, 8> & CRC_8_WCDMA();
+  static const Parameters<crcpp_uint16, 10> & CRC_10();
+  static const Parameters<crcpp_uint16, 10> & CRC_10_CDMA2000();
+  static const Parameters<crcpp_uint16, 11> & CRC_11();
+  static const Parameters<crcpp_uint16, 12> & CRC_12_CDMA2000();
+  static const Parameters<crcpp_uint16, 12> & CRC_12_DECT();
+  static const Parameters<crcpp_uint16, 12> & CRC_12_UMTS();
+  static const Parameters<crcpp_uint16, 13> & CRC_13_BBC();
+  static const Parameters<crcpp_uint16, 15> & CRC_15();
+  static const Parameters<crcpp_uint16, 15> & CRC_15_MPT1327();
+#endif
+  static const Parameters<crcpp_uint16, 16> & CRC_16_ARC();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_BUYPASS();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_CCITTFALSE();
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint16, 16> & CRC_16_CDMA2000();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_CMS();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_DECTR();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_DECTX();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_DNP();
+#endif
+  static const Parameters<crcpp_uint16, 16> & CRC_16_GENIBUS();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_KERMIT();
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint16, 16> & CRC_16_MAXIM();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_MODBUS();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_T10DIF();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_USB();
+#endif
+  static const Parameters<crcpp_uint16, 16> & CRC_16_X25();
+  static const Parameters<crcpp_uint16, 16> & CRC_16_XMODEM();
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint32, 17> & CRC_17_CAN();
+  static const Parameters<crcpp_uint32, 21> & CRC_21_CAN();
+  static const Parameters<crcpp_uint32, 24> & CRC_24();
+  static const Parameters<crcpp_uint32, 24> & CRC_24_FLEXRAYA();
+  static const Parameters<crcpp_uint32, 24> & CRC_24_FLEXRAYB();
+  static const Parameters<crcpp_uint32, 30> & CRC_30();
+#endif
+  static const Parameters<crcpp_uint32, 32> & CRC_32();
+  static const Parameters<crcpp_uint32, 32> & CRC_32_BZIP2();
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint32, 32> & CRC_32_C();
+#endif
+  static const Parameters<crcpp_uint32, 32> & CRC_32_MPEG2();
+  static const Parameters<crcpp_uint32, 32> & CRC_32_POSIX();
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+  static const Parameters<crcpp_uint32, 32> & CRC_32_Q();
+  static const Parameters<crcpp_uint64, 40> & CRC_40_GSM();
+  static const Parameters<crcpp_uint64, 64> & CRC_64();
+#endif
+
+#ifdef CRCPP_USE_CPP11
+  CRC() = delete;
+  CRC(const CRC & other) = delete;
+  CRC & operator=(const CRC & other) = delete;
+  CRC(CRC && other) = delete;
+  CRC & operator=(CRC && other) = delete;
+#endif
+
+private:
+#ifndef CRCPP_USE_CPP11
+  CRC();
+  CRC(const CRC & other);
+  CRC & operator=(const CRC & other);
+#endif
+
+  template<typename IntegerType>
+  static IntegerType Reflect(IntegerType value, crcpp_uint16 numBits);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType Finalize(CRCType remainder, CRCType finalXOR, bool reflectOutput);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType UndoFinalize(CRCType remainder, CRCType finalXOR, bool reflectOutput);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType CalculateRemainder(
+    const void * data, crcpp_size size, const Parameters<CRCType,
+    CRCWidth> & parameters, CRCType remainder);
+
+  template<typename CRCType, crcpp_uint16 CRCWidth>
+  static CRCType CalculateRemainder(
+    const void * data, crcpp_size size, const Table<CRCType,
+    CRCWidth> & lookupTable, CRCType remainder);
+};
+
+/**
+    @brief Returns a CRC lookup table construct using these CRC parameters.
+    @note This function primarily exists to allow use of the auto keyword instead of instantiating
+        a table directly, since template parameters are not inferred in constructors.
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC lookup table
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRC::Table<CRCType, CRCWidth> CRC::Parameters<CRCType, CRCWidth>::MakeTable() const
+{
+  // This should take advantage of RVO and optimize out the copy.
+  return CRC::Table<CRCType, CRCWidth>(*this);
+}
+
+/**
+    @brief Constructs a CRC table from a set of CRC parameters
+    @param[in] params CRC parameters
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRC::Table<CRCType, CRCWidth>::Table(const Parameters<CRCType, CRCWidth> & params)
+: parameters(params)
+{
+  InitTable();
+}
+
+#ifdef CRCPP_USE_CPP11
+/**
+    @brief Constructs a CRC table from a set of CRC parameters
+    @param[in] params CRC parameters
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRC::Table<CRCType, CRCWidth>::Table(Parameters<CRCType, CRCWidth> && params)
+: parameters(::std::move(params))
+{
+  InitTable();
+}
+#endif
+
+/**
+    @brief Gets the CRC parameters used to construct the CRC table
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC parameters
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline const CRC::Parameters<CRCType, CRCWidth> & CRC::Table<CRCType,
+  CRCWidth>::GetParameters() const
+{
+  return parameters;
+}
+
+/**
+    @brief Gets the CRC table
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC table
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline const CRCType * CRC::Table<CRCType, CRCWidth>::GetTable() const
+{
+  return table;
+}
+
+/**
+    @brief Gets an entry in the CRC table
+    @param[in] index Index into the CRC table
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC table entry
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::Table<CRCType, CRCWidth>::operator[](unsigned char index) const
+{
+  return table[index];
+}
+
+/**
+    @brief Initializes a CRC table.
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline void CRC::Table<CRCType, CRCWidth>::InitTable()
+{
+  // For masking off the bits for the CRC
+  // (in the event that the number of bits in CRCType is larger than CRCWidth)
+  static crcpp_constexpr CRCType BIT_MASK((CRCType(1) << (CRCWidth - CRCType(1))) |
+    ((CRCType(1) << (CRCWidth - CRCType(1))) - CRCType(1)));
+
+  // The conditional expression is used to avoid a -Wshift-count-overflow warning.
+  static crcpp_constexpr CRCType SHIFT(
+    (CHAR_BIT >= CRCWidth) ? static_cast<CRCType>(CHAR_BIT - CRCWidth) : 0);
+
+  CRCType crc;
+  unsigned char byte = 0;
+
+  // Loop over each dividend (each possible number storable in an unsigned char)
+  do {
+    crc = CRC::CalculateRemainder<CRCType, CRCWidth>(&byte, sizeof(byte), parameters, CRCType(0));
+
+    // This mask might not be necessary; all unit tests pass with this line commented out,
+    // but that might just be a coincidence based on the CRC parameters used for testing.
+    // In any case, this is harmless to leave in and only adds a single machine instruction
+    // per loop iteration.
+    crc &= BIT_MASK;
+
+    if (!parameters.reflectInput && CRCWidth < CHAR_BIT) {
+      // Undo the special operation at the end of the CalculateRemainder()
+      // function for non-reflected CRCs < CHAR_BIT.
+      crc = static_cast<CRCType>(crc << SHIFT);
+    }
+
+    table[byte] = crc;
+  } while (++byte);
+}
+
+/**
+    @brief Computes a CRC.
+    @param[in] data Data over which CRC will be computed
+    @param[in] size Size of the data
+    @param[in] parameters CRC parameters
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::Calculate(
+  const void * data, crcpp_size size, const Parameters<CRCType,
+  CRCWidth> & parameters)
+{
+  CRCType remainder = CalculateRemainder(data, size, parameters, parameters.initialValue);
+
+  // No need to mask the remainder here; the mask will be applied in the Finalize() function.
+
+  return Finalize<CRCType, CRCWidth>(
+    remainder, parameters.finalXOR,
+    parameters.reflectInput != parameters.reflectOutput);
+}
+/**
+    @brief Appends additional data to a previous CRC calculation.
+    @note This function can be used to compute multi-part CRCs.
+    @param[in] data Data over which CRC will be computed
+    @param[in] size Size of the data
+    @param[in] parameters CRC parameters
+    @param[in] crc CRC from a previous calculation
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::Calculate(
+  const void * data, crcpp_size size, const Parameters<CRCType,
+  CRCWidth> & parameters, CRCType crc)
+{
+  CRCType remainder = UndoFinalize<CRCType, CRCWidth>(
+    crc, parameters.finalXOR,
+    parameters.reflectInput !=
+    parameters.reflectOutput);
+
+  remainder = CalculateRemainder(data, size, parameters, remainder);
+
+  // No need to mask the remainder here; the mask will be applied in the Finalize() function.
+
+  return Finalize<CRCType, CRCWidth>(
+    remainder, parameters.finalXOR,
+    parameters.reflectInput != parameters.reflectOutput);
+}
+
+/**
+    @brief Computes a CRC via a lookup table.
+    @param[in] data Data over which CRC will be computed
+    @param[in] size Size of the data
+    @param[in] lookupTable CRC lookup table
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::Calculate(
+  const void * data, crcpp_size size, const Table<CRCType,
+  CRCWidth> & lookupTable)
+{
+  const Parameters<CRCType, CRCWidth> & parameters = lookupTable.GetParameters();
+
+  CRCType remainder = CalculateRemainder(data, size, lookupTable, parameters.initialValue);
+
+  // No need to mask the remainder here; the mask will be applied in the Finalize() function.
+
+  return Finalize<CRCType, CRCWidth>(
+    remainder, parameters.finalXOR,
+    parameters.reflectInput != parameters.reflectOutput);
+}
+
+/**
+    @brief Appends additional data to a previous CRC calculation using a lookup table.
+    @note This function can be used to compute multi-part CRCs.
+    @param[in] data Data over which CRC will be computed
+    @param[in] size Size of the data
+    @param[in] lookupTable CRC lookup table
+    @param[in] crc CRC from a previous calculation
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::Calculate(
+  const void * data, crcpp_size size, const Table<CRCType,
+  CRCWidth> & lookupTable, CRCType crc)
+{
+  const Parameters<CRCType, CRCWidth> & parameters = lookupTable.GetParameters();
+
+  CRCType remainder = UndoFinalize<CRCType, CRCWidth>(
+    crc, parameters.finalXOR,
+    parameters.reflectInput !=
+    parameters.reflectOutput);
+
+  remainder = CalculateRemainder(data, size, lookupTable, remainder);
+
+  // No need to mask the remainder here; the mask will be applied in the Finalize() function.
+
+  return Finalize<CRCType, CRCWidth>(
+    remainder, parameters.finalXOR,
+    parameters.reflectInput != parameters.reflectOutput);
+}
+
+/**
+    @brief Reflects (i.e. reverses the bits within) an integer value.
+    @param[in] value Value to reflect
+    @param[in] numBits Number of bits in the integer which will be reflected
+    @tparam IntegerType Integer type of the value being reflected
+    @return Reflected value
+*/
+template<typename IntegerType>
+inline IntegerType CRC::Reflect(IntegerType value, crcpp_uint16 numBits)
+{
+  IntegerType reversedValue(0);
+
+  for (crcpp_uint16 i = 0; i < numBits; ++i) {
+    reversedValue = static_cast<IntegerType>((reversedValue << 1) | (value & 1));
+    value = static_cast<IntegerType>(value >> 1);
+  }
+
+  return reversedValue;
+}
+
+/**
+    @brief Computes the final reflection and XOR of a CRC remainder.
+    @param[in] remainder CRC remainder to reflect and XOR
+    @param[in] finalXOR Final value to XOR with the remainder
+    @param[in] reflectOutput true to reflect each byte of the remainder before the XOR
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return Final CRC
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::Finalize(CRCType remainder, CRCType finalXOR, bool reflectOutput)
+{
+  // For masking off the bits for the CRC
+  // (in the event that the number of bits in CRCType is larger than CRCWidth)
+  static crcpp_constexpr CRCType BIT_MASK = (CRCType(1) << (CRCWidth - CRCType(1))) |
+    ((CRCType(1) << (CRCWidth - CRCType(1))) - CRCType(1));
+
+  if (reflectOutput) {
+    remainder = Reflect(remainder, CRCWidth);
+  }
+
+  return (remainder ^ finalXOR) & BIT_MASK;
+}
+
+/**
+    @brief Undoes the process of computing the final reflection and XOR of a CRC remainder.
+    @note This function allows for computation of multi-part CRCs
+    @note Calling UndoFinalize() followed by Finalize() (or vice versa)
+          will always return the original remainder value:
+
+        CRCType x = ...;
+        CRCType y = Finalize(x, finalXOR, reflectOutput);
+        CRCType z = UndoFinalize(y, finalXOR, reflectOutput);
+        assert(x == z);
+
+    @param[in] crc Reflected and XORed CRC
+    @param[in] finalXOR Final value XORed with the remainder
+    @param[in] reflectOutput true if the remainder is to be reflected
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return Un-finalized CRC remainder
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::UndoFinalize(CRCType crc, CRCType finalXOR, bool reflectOutput)
+{
+  // For masking off the bits for the CRC
+  // (in the event that the number of bits in CRCType is larger than CRCWidth)
+  static crcpp_constexpr CRCType BIT_MASK = (CRCType(1) << (CRCWidth - CRCType(1))) |
+    ((CRCType(1) << (CRCWidth - CRCType(1))) - CRCType(1));
+
+  crc = (crc & BIT_MASK) ^ finalXOR;
+
+  if (reflectOutput) {
+    crc = Reflect(crc, CRCWidth);
+  }
+
+  return crc;
+}
+
+/**
+    @brief Computes a CRC remainder.
+    @param[in] data Data over which the remainder will be computed
+    @param[in] size Size of the data
+    @param[in] parameters CRC parameters
+    @param[in] remainder Running CRC remainder. Can be an initial value or the result of a previous CRC remainder calculation.
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC remainder
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::CalculateRemainder(
+  const void * data, crcpp_size size, const Parameters<CRCType,
+  CRCWidth> & parameters, CRCType remainder)
+{
+#ifdef CRCPP_USE_CPP11
+  // This static_assert is put here because this function will always be compiled in no matter what
+  // the template parameters are and whether or not a table lookup or bit-by-bit algorithm is used.
+  static_assert(
+    ::std::numeric_limits<CRCType>::digits >= CRCWidth,
+    "CRCType is too small to contain a CRC of width CRCWidth.");
+#else
+  // Catching this compile-time error is very important. Sadly,
+  // the compiler error will be very cryptic, but it's better than nothing.
+  // cppcheck-suppress zerodiv
+  enum { static_assert_failed_CRCType_is_too_small_to_contain_a_CRC_of_width_CRCWidth = 1 /
+      (::std::numeric_limits<CRCType>::digits >= CRCWidth ? 1 : 0) };
+#endif
+
+  const unsigned char * current = reinterpret_cast<const unsigned char *>(data);
+
+  // Slightly different implementations based on the parameters.
+  // The current implementations try to eliminate as much
+  // computation from the inner loop (looping over each bit) as possible.
+  if (parameters.reflectInput) {
+    CRCType polynomial = CRC::Reflect(parameters.polynomial, CRCWidth);
+    while (size--) {
+      remainder = static_cast<CRCType>(remainder ^ *current++);
+
+      // An optimizing compiler might choose to unroll this loop.
+      for (crcpp_size i = 0; i < CHAR_BIT; ++i) {
+#ifdef CRCPP_BRANCHLESS
+        // Clever way to avoid a branch at the expense of a multiplication.
+        // This code is equivalent to the following:
+        // if (remainder & 1)
+        //     remainder = (remainder >> 1) ^ polynomial;
+        // else
+        //     remainder >>= 1;
+        remainder = static_cast<CRCType>((remainder >> 1) ^ ((remainder & 1) * polynomial));
+#else
+        remainder =
+          static_cast<CRCType>((remainder & 1) ? ((remainder >> 1) ^ polynomial) : (remainder >>
+          1));
+#endif
+      }
+    }
+  } else if (CRCWidth >= CHAR_BIT) {
+    static crcpp_constexpr CRCType CRC_WIDTH_MINUS_ONE(CRCWidth - CRCType(1));
+#ifndef CRCPP_BRANCHLESS
+    static crcpp_constexpr CRCType CRC_HIGHEST_BIT_MASK(CRCType(1) << CRC_WIDTH_MINUS_ONE);
+#endif
+    // The conditional expression is used to avoid a -Wshift-count-overflow warning.
+    static crcpp_constexpr CRCType SHIFT(
+      (CRCWidth >= CHAR_BIT) ? static_cast<CRCType>(CRCWidth - CHAR_BIT) : 0);
+
+    while (size--) {
+      remainder = static_cast<CRCType>(remainder ^ (static_cast<CRCType>(*current++) << SHIFT));
+
+      // An optimizing compiler might choose to unroll this loop.
+      for (crcpp_size i = 0; i < CHAR_BIT; ++i) {
+#ifdef CRCPP_BRANCHLESS
+        // Clever way to avoid a branch at the expense of a multiplication.
+        // This code is equivalent to the following:
+        // if (remainder & CRC_HIGHEST_BIT_MASK)
+        //     remainder = (remainder << 1) ^ parameters.polynomial;
+        // else
+        //     remainder <<= 1;
+        remainder =
+          static_cast<CRCType>((remainder <<
+          1) ^ (((remainder >> CRC_WIDTH_MINUS_ONE) & 1) * parameters.polynomial));
+#else
+        remainder =
+          static_cast<CRCType>((remainder &
+          CRC_HIGHEST_BIT_MASK) ? ((remainder << 1) ^ parameters.polynomial) : (remainder << 1));
+#endif
+      }
+    }
+  } else {
+    static crcpp_constexpr CRCType CHAR_BIT_MINUS_ONE(CHAR_BIT - 1);
+#ifndef CRCPP_BRANCHLESS
+    static crcpp_constexpr CRCType CHAR_BIT_HIGHEST_BIT_MASK(CRCType(1) << CHAR_BIT_MINUS_ONE);
+#endif
+    // The conditional expression is used to avoid a -Wshift-count-overflow warning.
+    static crcpp_constexpr CRCType SHIFT(
+      (CHAR_BIT >= CRCWidth) ? static_cast<CRCType>(CHAR_BIT - CRCWidth) : 0);
+
+    CRCType polynomial = static_cast<CRCType>(parameters.polynomial << SHIFT);
+    remainder = static_cast<CRCType>(remainder << SHIFT);
+
+    while (size--) {
+      remainder = static_cast<CRCType>(remainder ^ *current++);
+
+      // An optimizing compiler might choose to unroll this loop.
+      for (crcpp_size i = 0; i < CHAR_BIT; ++i) {
+#ifdef CRCPP_BRANCHLESS
+        // Clever way to avoid a branch at the expense of a multiplication.
+        // This code is equivalent to the following:
+        // if (remainder & CHAR_BIT_HIGHEST_BIT_MASK)
+        //     remainder = (remainder << 1) ^ polynomial;
+        // else
+        //     remainder <<= 1;
+        remainder =
+          static_cast<CRCType>((remainder <<
+          1) ^ (((remainder >> CHAR_BIT_MINUS_ONE) & 1) * polynomial));
+#else
+        remainder =
+          static_cast<CRCType>((remainder &
+          CHAR_BIT_HIGHEST_BIT_MASK) ? ((remainder << 1) ^ polynomial) : (remainder << 1));
+#endif
+      }
+    }
+
+    remainder = static_cast<CRCType>(remainder >> SHIFT);
+  }
+
+  return remainder;
+}
+
+/**
+    @brief Computes a CRC remainder using lookup table.
+    @param[in] data Data over which the remainder will be computed
+    @param[in] size Size of the data
+    @param[in] lookupTable CRC lookup table
+    @param[in] remainder Running CRC remainder.
+               Can be an initial value or the result of a previous CRC remainder calculation.
+    @tparam CRCType Integer type for storing the CRC result
+    @tparam CRCWidth Number of bits in the CRC
+    @return CRC remainder
+*/
+template<typename CRCType, crcpp_uint16 CRCWidth>
+inline CRCType CRC::CalculateRemainder(
+  const void * data, crcpp_size size, const Table<CRCType,
+  CRCWidth> & lookupTable, CRCType remainder)
+{
+  const unsigned char * current = reinterpret_cast<const unsigned char *>(data);
+
+  if (lookupTable.GetParameters().reflectInput) {
+    while (size--) {
+#if defined(WIN32) || defined(_WIN32) || defined(WINCE)
+      // Disable warning about data loss when doing (remainder >> CHAR_BIT) when
+      // remainder is one byte long. The algorithm is still correct in this case,
+      // though it's possible that one additional machine instruction will be executed.
+#   pragma warning (push)
+#   pragma warning (disable : 4333)
+#endif
+      remainder =
+        static_cast<CRCType>((remainder >>
+        CHAR_BIT) ^ lookupTable[static_cast<unsigned char>(remainder ^ *current++)]);
+#if defined(WIN32) || defined(_WIN32) || defined(WINCE)
+#   pragma warning (pop)
+#endif
+    }
+  } else if (CRCWidth >= CHAR_BIT) {
+    // The conditional expression is used to avoid a -Wshift-count-overflow warning.
+    static crcpp_constexpr CRCType SHIFT(
+      (CRCWidth >= CHAR_BIT) ? static_cast<CRCType>(CRCWidth - CHAR_BIT) : 0);
+
+    while (size--) {
+      remainder =
+        static_cast<CRCType>((remainder <<
+        CHAR_BIT) ^ lookupTable[static_cast<unsigned char>((remainder >> SHIFT) ^ *current++)]);
+    }
+  } else {
+    // The conditional expression is used to avoid a -Wshift-count-overflow warning.
+    static crcpp_constexpr CRCType SHIFT(
+      (CHAR_BIT >= CRCWidth) ? static_cast<CRCType>(CHAR_BIT - CRCWidth) : 0);
+
+    remainder = static_cast<CRCType>(remainder << SHIFT);
+
+    while (size--) {
+      // Note: no need to mask here since remainder is guaranteed to fit in a single byte.
+      remainder = lookupTable[static_cast<unsigned char>(remainder ^ *current++)];
+    }
+
+    remainder = static_cast<CRCType>(remainder >> SHIFT);
+  }
+
+  return remainder;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-4 ITU.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-4 ITU has the following parameters and check value:
+        - polynomial     = 0x3
+        - initial value  = 0x0
+        - final XOR      = 0x0
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x7
+    @return CRC-4 ITU parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 4> & CRC::CRC_4_ITU()
+{
+  static const Parameters<crcpp_uint8, 4> parameters = {0x3, 0x0, 0x0, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-5 EPC.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-5 EPC has the following parameters and check value:
+        - polynomial     = 0x09
+        - initial value  = 0x09
+        - final XOR      = 0x00
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x00
+    @return CRC-5 EPC parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 5> & CRC::CRC_5_EPC()
+{
+  static const Parameters<crcpp_uint8, 5> parameters = {0x09, 0x09, 0x00, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-5 ITU.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-5 ITU has the following parameters and check value:
+        - polynomial     = 0x15
+        - initial value  = 0x00
+        - final XOR      = 0x00
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x07
+    @return CRC-5 ITU parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 5> & CRC::CRC_5_ITU()
+{
+  static const Parameters<crcpp_uint8, 5> parameters = {0x15, 0x00, 0x00, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-5 USB.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-5 USB has the following parameters and check value:
+        - polynomial     = 0x05
+        - initial value  = 0x1F
+        - final XOR      = 0x1F
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x19
+    @return CRC-5 USB parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 5> & CRC::CRC_5_USB()
+{
+  static const Parameters<crcpp_uint8, 5> parameters = {0x05, 0x1F, 0x1F, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-6 CDMA2000-A.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-6 CDMA2000-A has the following parameters and check value:
+        - polynomial     = 0x27
+        - initial value  = 0x3F
+        - final XOR      = 0x00
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x0D
+    @return CRC-6 CDMA2000-A parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 6> & CRC::CRC_6_CDMA2000A()
+{
+  static const Parameters<crcpp_uint8, 6> parameters = {0x27, 0x3F, 0x00, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-6 CDMA2000-B.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-6 CDMA2000-A has the following parameters and check value:
+        - polynomial     = 0x07
+        - initial value  = 0x3F
+        - final XOR      = 0x00
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x3B
+    @return CRC-6 CDMA2000-B parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 6> & CRC::CRC_6_CDMA2000B()
+{
+  static const Parameters<crcpp_uint8, 6> parameters = {0x07, 0x3F, 0x00, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-6 ITU.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-6 ITU has the following parameters and check value:
+        - polynomial     = 0x03
+        - initial value  = 0x00
+        - final XOR      = 0x00
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x06
+    @return CRC-6 ITU parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 6> & CRC::CRC_6_ITU()
+{
+  static const Parameters<crcpp_uint8, 6> parameters = {0x03, 0x00, 0x00, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-7 JEDEC.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-7 JEDEC has the following parameters and check value:
+        - polynomial     = 0x09
+        - initial value  = 0x00
+        - final XOR      = 0x00
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x75
+    @return CRC-7 JEDEC parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 7> & CRC::CRC_7()
+{
+  static const Parameters<crcpp_uint8, 7> parameters = {0x09, 0x00, 0x00, false, false};
+  return parameters;
+}
+#endif  // CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+
+/**
+    @brief Returns a set of parameters for CRC-8 SMBus.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-8 SMBus has the following parameters and check value:
+        - polynomial     = 0x07
+        - initial value  = 0x00
+        - final XOR      = 0x00
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xF4
+    @return CRC-8 SMBus parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 8> & CRC::CRC_8()
+{
+  static const Parameters<crcpp_uint8, 8> parameters = {0x07, 0x00, 0x00, false, false};
+  return parameters;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-8 EBU (aka CRC-8 AES).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-8 EBU has the following parameters and check value:
+        - polynomial     = 0x1D
+        - initial value  = 0xFF
+        - final XOR      = 0x00
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x97
+    @return CRC-8 EBU parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 8> & CRC::CRC_8_EBU()
+{
+  static const Parameters<crcpp_uint8, 8> parameters = {0x1D, 0xFF, 0x00, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-8 MAXIM (aka CRC-8 DOW-CRC).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-8 MAXIM has the following parameters and check value:
+        - polynomial     = 0x31
+        - initial value  = 0x00
+        - final XOR      = 0x00
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0xA1
+    @return CRC-8 MAXIM parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 8> & CRC::CRC_8_MAXIM()
+{
+  static const Parameters<crcpp_uint8, 8> parameters = {0x31, 0x00, 0x00, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-8 WCDMA.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-8 WCDMA has the following parameters and check value:
+        - polynomial     = 0x9B
+        - initial value  = 0x00
+        - final XOR      = 0x00
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x25
+    @return CRC-8 WCDMA parameters
+*/
+inline const CRC::Parameters<crcpp_uint8, 8> & CRC::CRC_8_WCDMA()
+{
+  static const Parameters<crcpp_uint8, 8> parameters = {0x9B, 0x00, 0x00, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-10 ITU.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-10 ITU has the following parameters and check value:
+        - polynomial     = 0x233
+        - initial value  = 0x000
+        - final XOR      = 0x000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x199
+    @return CRC-10 ITU parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 10> & CRC::CRC_10()
+{
+  static const Parameters<crcpp_uint16, 10> parameters = {0x233, 0x000, 0x000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-10 CDMA2000.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-10 CDMA2000 has the following parameters and check value:
+        - polynomial     = 0x3D9
+        - initial value  = 0x3FF
+        - final XOR      = 0x000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x233
+    @return CRC-10 CDMA2000 parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 10> & CRC::CRC_10_CDMA2000()
+{
+  static const Parameters<crcpp_uint16, 10> parameters = {0x3D9, 0x3FF, 0x000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-11 FlexRay.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-11 FlexRay has the following parameters and check value:
+        - polynomial     = 0x385
+        - initial value  = 0x01A
+        - final XOR      = 0x000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x5A3
+    @return CRC-11 FlexRay parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 11> & CRC::CRC_11()
+{
+  static const Parameters<crcpp_uint16, 11> parameters = {0x385, 0x01A, 0x000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-12 CDMA2000.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-12 CDMA2000 has the following parameters and check value:
+        - polynomial     = 0xF13
+        - initial value  = 0xFFF
+        - final XOR      = 0x000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xD4D
+    @return CRC-12 CDMA2000 parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 12> & CRC::CRC_12_CDMA2000()
+{
+  static const Parameters<crcpp_uint16, 12> parameters = {0xF13, 0xFFF, 0x000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-12 DECT (aka CRC-12 X-CRC).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-12 DECT has the following parameters and check value:
+        - polynomial     = 0x80F
+        - initial value  = 0x000
+        - final XOR      = 0x000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xF5B
+    @return CRC-12 DECT parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 12> & CRC::CRC_12_DECT()
+{
+  static const Parameters<crcpp_uint16, 12> parameters = {0x80F, 0x000, 0x000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-12 UMTS (aka CRC-12 3GPP).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-12 UMTS has the following parameters and check value:
+        - polynomial     = 0x80F
+        - initial value  = 0x000
+        - final XOR      = 0x000
+        - reflect input  = false
+        - reflect output = true
+        - check value    = 0xDAF
+    @return CRC-12 UMTS parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 12> & CRC::CRC_12_UMTS()
+{
+  static const Parameters<crcpp_uint16, 12> parameters = {0x80F, 0x000, 0x000, false, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-13 BBC.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-13 BBC has the following parameters and check value:
+        - polynomial     = 0x1CF5
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x04FA
+    @return CRC-13 BBC parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 13> & CRC::CRC_13_BBC()
+{
+  static const Parameters<crcpp_uint16, 13> parameters = {0x1CF5, 0x0000, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-15 CAN.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-15 CAN has the following parameters and check value:
+        - polynomial     = 0x4599
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x059E
+    @return CRC-15 CAN parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 15> & CRC::CRC_15()
+{
+  static const Parameters<crcpp_uint16, 15> parameters = {0x4599, 0x0000, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-15 MPT1327.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-15 MPT1327 has the following parameters and check value:
+        - polynomial     = 0x6815
+        - initial value  = 0x0000
+        - final XOR      = 0x0001
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x2566
+    @return CRC-15 MPT1327 parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 15> & CRC::CRC_15_MPT1327()
+{
+  static const Parameters<crcpp_uint16, 15> parameters = {0x6815, 0x0000, 0x0001, false, false};
+  return parameters;
+}
+#endif  // CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+
+/**
+    @brief Returns a set of parameters for CRC-16 ARC (aka CRC-16 IBM, CRC-16 LHA).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 ARC has the following parameters and check value:
+        - polynomial     = 0x8005
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0xBB3D
+    @return CRC-16 ARC parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_ARC()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8005, 0x0000, 0x0000, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 BUYPASS (aka CRC-16 VERIFONE, CRC-16 UMTS).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 BUYPASS has the following parameters and check value:
+        - polynomial     = 0x8005
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xFEE8
+    @return CRC-16 BUYPASS parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_BUYPASS()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8005, 0x0000, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 CCITT FALSE.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 CCITT FALSE has the following parameters and check value:
+        - polynomial     = 0x1021
+        - initial value  = 0xFFFF
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x29B1
+    @return CRC-16 CCITT FALSE parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_CCITTFALSE()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x1021, 0xFFFF, 0x0000, false, false};
+  return parameters;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-16 CDMA2000.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 CDMA2000 has the following parameters and check value:
+        - polynomial     = 0xC867
+        - initial value  = 0xFFFF
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x4C06
+    @return CRC-16 CDMA2000 parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_CDMA2000()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0xC867, 0xFFFF, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 CMS.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 CMS has the following parameters and check value:
+        - polynomial     = 0x8005
+        - initial value  = 0xFFFF
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xAEE7
+    @return CRC-16 CMS parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_CMS()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8005, 0xFFFF, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 DECT-R (aka CRC-16 R-CRC).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 DECT-R has the following parameters and check value:
+        - polynomial     = 0x0589
+        - initial value  = 0x0000
+        - final XOR      = 0x0001
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x007E
+    @return CRC-16 DECT-R parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_DECTR()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x0589, 0x0000, 0x0001, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 DECT-X (aka CRC-16 X-CRC).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 DECT-X has the following parameters and check value:
+        - polynomial     = 0x0589
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x007F
+    @return CRC-16 DECT-X parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_DECTX()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x0589, 0x0000, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 DNP.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 DNP has the following parameters and check value:
+        - polynomial     = 0x3D65
+        - initial value  = 0x0000
+        - final XOR      = 0xFFFF
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0xEA82
+    @return CRC-16 DNP parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_DNP()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x3D65, 0x0000, 0xFFFF, true, true};
+  return parameters;
+}
+#endif  // CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+
+/**
+    @brief Returns a set of parameters for CRC-16 GENIBUS (aka CRC-16 EPC, CRC-16 I-CODE, CRC-16 DARC).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 GENIBUS has the following parameters and check value:
+        - polynomial     = 0x1021
+        - initial value  = 0xFFFF
+        - final XOR      = 0xFFFF
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xD64E
+    @return CRC-16 GENIBUS parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_GENIBUS()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x1021, 0xFFFF, 0xFFFF, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 KERMIT (aka CRC-16 CCITT, CRC-16 CCITT-TRUE).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 KERMIT has the following parameters and check value:
+        - polynomial     = 0x1021
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x2189
+    @return CRC-16 KERMIT parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_KERMIT()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x1021, 0x0000, 0x0000, true, true};
+  return parameters;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-16 MAXIM.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 MAXIM has the following parameters and check value:
+        - polynomial     = 0x8005
+        - initial value  = 0x0000
+        - final XOR      = 0xFFFF
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x44C2
+    @return CRC-16 MAXIM parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_MAXIM()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8005, 0x0000, 0xFFFF, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 MODBUS.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 MODBUS has the following parameters and check value:
+        - polynomial     = 0x8005
+        - initial value  = 0xFFFF
+        - final XOR      = 0x0000
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x4B37
+    @return CRC-16 MODBUS parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_MODBUS()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8005, 0xFFFF, 0x0000, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 T10-DIF.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 T10-DIF has the following parameters and check value:
+        - polynomial     = 0x8BB7
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xD0DB
+    @return CRC-16 T10-DIF parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_T10DIF()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8BB7, 0x0000, 0x0000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 USB.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 USB has the following parameters and check value:
+        - polynomial     = 0x8005
+        - initial value  = 0xFFFF
+        - final XOR      = 0xFFFF
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0xB4C8
+    @return CRC-16 USB parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_USB()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x8005, 0xFFFF, 0xFFFF, true, true};
+  return parameters;
+}
+
+#endif  // CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+
+/**
+    @brief Returns a set of parameters for CRC-16 X-25 (aka CRC-16 IBM-SDLC, CRC-16 ISO-HDLC, CRC-16 B).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 X-25 has the following parameters and check value:
+        - polynomial     = 0x1021
+        - initial value  = 0xFFFF
+        - final XOR      = 0xFFFF
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0x906E
+    @return CRC-16 X-25 parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_X25()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x1021, 0xFFFF, 0xFFFF, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-16 XMODEM (aka CRC-16 ZMODEM, CRC-16 ACORN, CRC-16 LTE).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-16 XMODEM has the following parameters and check value:
+        - polynomial     = 0x1021
+        - initial value  = 0x0000
+        - final XOR      = 0x0000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x31C3
+    @return CRC-16 XMODEM parameters
+*/
+inline const CRC::Parameters<crcpp_uint16, 16> & CRC::CRC_16_XMODEM()
+{
+  static const Parameters<crcpp_uint16, 16> parameters = {0x1021, 0x0000, 0x0000, false, false};
+  return parameters;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-17 CAN.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-17 CAN has the following parameters and check value:
+        - polynomial     = 0x1685B
+        - initial value  = 0x00000
+        - final XOR      = 0x00000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x04F03
+    @return CRC-17 CAN parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 17> & CRC::CRC_17_CAN()
+{
+  static const Parameters<crcpp_uint32, 17> parameters = {0x1685B, 0x00000, 0x00000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-21 CAN.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-21 CAN has the following parameters and check value:
+        - polynomial     = 0x102899
+        - initial value  = 0x000000
+        - final XOR      = 0x000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x0ED841
+    @return CRC-21 CAN parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 21> & CRC::CRC_21_CAN()
+{
+  static const Parameters<crcpp_uint32,
+    21> parameters = {0x102899, 0x000000, 0x000000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-24 OPENPGP.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-24 OPENPGP has the following parameters and check value:
+        - polynomial     = 0x864CFB
+        - initial value  = 0xB704CE
+        - final XOR      = 0x000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x21CF02
+    @return CRC-24 OPENPGP parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 24> & CRC::CRC_24()
+{
+  static const Parameters<crcpp_uint32,
+    24> parameters = {0x864CFB, 0xB704CE, 0x000000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-24 FlexRay-A.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-24 FlexRay-A has the following parameters and check value:
+        - polynomial     = 0x5D6DCB
+        - initial value  = 0xFEDCBA
+        - final XOR      = 0x000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x7979BD
+    @return CRC-24 FlexRay-A parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 24> & CRC::CRC_24_FLEXRAYA()
+{
+  static const Parameters<crcpp_uint32,
+    24> parameters = {0x5D6DCB, 0xFEDCBA, 0x000000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-24 FlexRay-B.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-24 FlexRay-B has the following parameters and check value:
+        - polynomial     = 0x5D6DCB
+        - initial value  = 0xABCDEF
+        - final XOR      = 0x000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x1F23B8
+    @return CRC-24 FlexRay-B parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 24> & CRC::CRC_24_FLEXRAYB()
+{
+  static const Parameters<crcpp_uint32,
+    24> parameters = {0x5D6DCB, 0xABCDEF, 0x000000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-30 CDMA.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-30 CDMA has the following parameters and check value:
+        - polynomial     = 0x2030B9C7
+        - initial value  = 0x3FFFFFFF
+        - final XOR      = 0x00000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x3B3CB540
+    @return CRC-30 CDMA parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 30> & CRC::CRC_30()
+{
+  static const Parameters<crcpp_uint32,
+    30> parameters = {0x2030B9C7, 0x3FFFFFFF, 0x00000000, false, false};
+  return parameters;
+}
+#endif  // CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+
+/**
+    @brief Returns a set of parameters for CRC-32 (aka CRC-32 ADCCP, CRC-32 PKZip).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-32 has the following parameters and check value:
+        - polynomial     = 0x04C11DB7
+        - initial value  = 0xFFFFFFFF
+        - final XOR      = 0xFFFFFFFF
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0xCBF43926
+    @return CRC-32 parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 32> & CRC::CRC_32()
+{
+  static const Parameters<crcpp_uint32,
+    32> parameters = {0x04C11DB7, 0xFFFFFFFF, 0xFFFFFFFF, true, true};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-32 BZIP2 (aka CRC-32 AAL5, CRC-32 DECT-B, CRC-32 B-CRC).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-32 BZIP2 has the following parameters and check value:
+        - polynomial     = 0x04C11DB7
+        - initial value  = 0xFFFFFFFF
+        - final XOR      = 0xFFFFFFFF
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xFC891918
+    @return CRC-32 BZIP2 parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 32> & CRC::CRC_32_BZIP2()
+{
+  static const Parameters<crcpp_uint32,
+    32> parameters = {0x04C11DB7, 0xFFFFFFFF, 0xFFFFFFFF, false, false};
+  return parameters;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-32 C (aka CRC-32 ISCSI, CRC-32 Castagnoli, CRC-32 Interlaken).
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-32 C has the following parameters and check value:
+        - polynomial     = 0x1EDC6F41
+        - initial value  = 0xFFFFFFFF
+        - final XOR      = 0xFFFFFFFF
+        - reflect input  = true
+        - reflect output = true
+        - check value    = 0xE3069283
+    @return CRC-32 C parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 32> & CRC::CRC_32_C()
+{
+  static const Parameters<crcpp_uint32,
+    32> parameters = {0x1EDC6F41, 0xFFFFFFFF, 0xFFFFFFFF, true, true};
+  return parameters;
+}
+#endif
+
+/**
+    @brief Returns a set of parameters for CRC-32 MPEG-2.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-32 MPEG-2 has the following parameters and check value:
+        - polynomial     = 0x04C11DB7
+        - initial value  = 0xFFFFFFFF
+        - final XOR      = 0x00000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x0376E6E7
+    @return CRC-32 MPEG-2 parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 32> & CRC::CRC_32_MPEG2()
+{
+  static const Parameters<crcpp_uint32,
+    32> parameters = {0x04C11DB7, 0xFFFFFFFF, 0x00000000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-32 POSIX.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-32 POSIX has the following parameters and check value:
+        - polynomial     = 0x04C11DB7
+        - initial value  = 0x00000000
+        - final XOR      = 0xFFFFFFFF
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x765E7680
+    @return CRC-32 POSIX parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 32> & CRC::CRC_32_POSIX()
+{
+  static const Parameters<crcpp_uint32,
+    32> parameters = {0x04C11DB7, 0x00000000, 0xFFFFFFFF, false, false};
+  return parameters;
+}
+
+#ifdef CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+/**
+    @brief Returns a set of parameters for CRC-32 Q.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-32 Q has the following parameters and check value:
+        - polynomial     = 0x814141AB
+        - initial value  = 0x00000000
+        - final XOR      = 0x00000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x3010BF7F
+    @return CRC-32 Q parameters
+*/
+inline const CRC::Parameters<crcpp_uint32, 32> & CRC::CRC_32_Q()
+{
+  static const Parameters<crcpp_uint32,
+    32> parameters = {0x814141AB, 0x00000000, 0x00000000, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-40 GSM.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-40 GSM has the following parameters and check value:
+        - polynomial     = 0x0004820009
+        - initial value  = 0x0000000000
+        - final XOR      = 0xFFFFFFFFFF
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0xD4164FC646
+    @return CRC-40 GSM parameters
+*/
+inline const CRC::Parameters<crcpp_uint64, 40> & CRC::CRC_40_GSM()
+{
+  static const Parameters<crcpp_uint64,
+    40> parameters = {0x0004820009, 0x0000000000, 0xFFFFFFFFFF, false, false};
+  return parameters;
+}
+
+/**
+    @brief Returns a set of parameters for CRC-64 ECMA.
+    @note The parameters are static and are delayed-constructed to reduce memory footprint.
+    @note CRC-64 ECMA has the following parameters and check value:
+        - polynomial     = 0x42F0E1EBA9EA3693
+        - initial value  = 0x0000000000000000
+        - final XOR      = 0x0000000000000000
+        - reflect input  = false
+        - reflect output = false
+        - check value    = 0x6C40DF5F0B497347
+    @return CRC-64 ECMA parameters
+*/
+inline const CRC::Parameters<crcpp_uint64, 64> & CRC::CRC_64()
+{
+  static const Parameters<crcpp_uint64,
+    64> parameters = {0x42F0E1EBA9EA3693, 0x0000000000000000, 0x0000000000000000, false, false};
+  return parameters;
+}
+#endif  // CRCPP_INCLUDE_ESOTERIC_CRC_DEFINITIONS
+
+#ifdef CRCPP_USE_NAMESPACE
+}  // namespace CRCPP
+#endif
+
+#endif  // VESC_DRIVER__CRC_HPP_
+
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\include\vesc_nexus\datatypes.hpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\include\vesc_nexus\datatypes.hpp
+# ----------------------------------------------------------------------------
+// Copyright 2020 F1TENTH Foundation
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+//   * Redistributions of source code must retain the above copyright
+//     notice, this list of conditions and the following disclaimer.
+//
+//   * Redistributions in binary form must reproduce the above copyright
+//     notice, this list of conditions and the following disclaimer in the
+//     documentation and/or other materials provided with the distribution.
+//
+//   * Neither the name of the {copyright_holder} nor the names of its
+//     contributors may be used to endorse or promote products derived from
+//     this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+
+
+/*
+  Some parts of this code, Copyright 2016 - 2019 Benjamin Vedder    benjamin@vedder.se
+
+  This file is part of the VESC firmware.
+
+  The VESC firmware is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  The VESC firmware is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  */
+
+#ifndef VESC_DRIVER__DATATYPES_HPP_
+#define VESC_DRIVER__DATATYPES_HPP_
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#include <cstdint>
+
+namespace vesc_nexus
+{
+
+typedef struct
+{
+  bool isVesc;
+}
+VSerialInfo_t;
+
+typedef enum
+{
+  CFG_T_UNDEFINED = 0,
+  CFG_T_DOUBLE,
+  CFG_T_INT,
+  CFG_T_QSTRING,
+  CFG_T_ENUM,
+  CFG_T_BOOL
+}
+CFG_T;
+
+typedef enum
+{
+  VESC_TX_UNDEFINED = 0,
+  VESC_TX_UINT8,
+  VESC_TX_INT8,
+  VESC_TX_UINT16,
+  VESC_TX_INT16,
+  VESC_TX_UINT32,
+  VESC_TX_INT32,
+  VESC_TX_DOUBLE16,
+  VESC_TX_DOUBLE32,
+  VESC_TX_DOUBLE32_AUTO
+} VESC_TX_T;
+
+// #include "ch.h"
+typedef uint32_t systime_t;    // defined in ch.h
+
+// Data types
+typedef enum
+{
+  MC_STATE_OFF = 0,
+  MC_STATE_DETECTING,
+  MC_STATE_RUNNING,
+  MC_STATE_FULL_BRAKE,
+} mc_state;
+
+typedef enum
+{
+  PWM_MODE_NONSYNCHRONOUS_HISW = 0,    // This mode is not recommended
+  PWM_MODE_SYNCHRONOUS,                // The recommended and most tested mode
+  PWM_MODE_BIPOLAR                     // Some glitches occasionally, can kill MOSFETs
+} mc_pwm_mode;
+
+typedef enum
+{
+  COMM_MODE_INTEGRATE = 0,
+  COMM_MODE_DELAY
+} mc_comm_mode;
+
+typedef enum
+{
+  SENSOR_MODE_SENSORLESS = 0,
+  SENSOR_MODE_SENSORED,
+  SENSOR_MODE_HYBRID
+} mc_sensor_mode;
+
+typedef enum
+{
+  FOC_SENSOR_MODE_SENSORLESS = 0,
+  FOC_SENSOR_MODE_ENCODER,
+  FOC_SENSOR_MODE_HALL,
+  FOC_SENSOR_MODE_HFI
+} mc_foc_sensor_mode;
+
+// Auxiliary output mode
+typedef enum
+{
+  OUT_AUX_MODE_OFF = 0,
+  OUT_AUX_MODE_ON_AFTER_2S,
+  OUT_AUX_MODE_ON_AFTER_5S,
+  OUT_AUX_MODE_ON_AFTER_10S,
+  OUT_AUX_MODE_UNUSED
+} out_aux_mode;
+
+// Temperature sensor type
+typedef enum
+{
+  TEMP_SENSOR_NTC_10K_25C = 0,
+  TEMP_SENSOR_PTC_1K_100C,
+  TEMP_SENSOR_KTY83_122,
+} temp_sensor_type;
+
+// General purpose drive output mode
+typedef enum
+{
+  GPD_OUTPUT_MODE_NONE = 0,
+  GPD_OUTPUT_MODE_MODULATION,
+  GPD_OUTPUT_MODE_VOLTAGE,
+  GPD_OUTPUT_MODE_CURRENT
+} gpd_output_mode;
+
+typedef enum
+{
+  MOTOR_TYPE_BLDC = 0,
+  MOTOR_TYPE_DC,
+  MOTOR_TYPE_FOC,
+  MOTOR_TYPE_GPD
+} mc_motor_type;
+
+// FOC current controller decoupling mode.
+typedef enum
+{
+  FOC_CC_DECOUPLING_DISABLED = 0,
+  FOC_CC_DECOUPLING_CROSS,
+  FOC_CC_DECOUPLING_BEMF,
+  FOC_CC_DECOUPLING_CROSS_BEMF
+} mc_foc_cc_decoupling_mode;
+
+typedef enum
+{
+  FOC_OBSERVER_ORTEGA_ORIGINAL = 0,
+  FOC_OBSERVER_ORTEGA_ITERATIVE
+} mc_foc_observer_type;
+
+typedef enum
+{
+  FAULT_CODE_NONE = 0,
+  FAULT_CODE_OVER_VOLTAGE,
+  FAULT_CODE_UNDER_VOLTAGE,
+  FAULT_CODE_DRV,
+  FAULT_CODE_ABS_OVER_CURRENT,
+  FAULT_CODE_OVER_TEMP_FET,
+  FAULT_CODE_OVER_TEMP_MOTOR,
+  FAULT_CODE_GATE_DRIVER_OVER_VOLTAGE,
+  FAULT_CODE_GATE_DRIVER_UNDER_VOLTAGE,
+  FAULT_CODE_MCU_UNDER_VOLTAGE,
+  FAULT_CODE_BOOTING_FROM_WATCHDOG_RESET,
+  FAULT_CODE_ENCODER_SPI,
+  FAULT_CODE_ENCODER_SINCOS_BELOW_MIN_AMPLITUDE,
+  FAULT_CODE_ENCODER_SINCOS_ABOVE_MAX_AMPLITUDE,
+  FAULT_CODE_FLASH_CORRUPTION,
+  FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_1,
+  FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_2,
+  FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_3,
+  FAULT_CODE_UNBALANCED_CURRENTS,
+  FAULT_CODE_BRK,
+  FAULT_CODE_RESOLVER_LOT,
+  FAULT_CODE_RESOLVER_DOS,
+  FAULT_CODE_RESOLVER_LOS
+} mc_fault_code;
+
+typedef enum
+{
+  CONTROL_MODE_DUTY = 0,
+  CONTROL_MODE_SPEED,
+  CONTROL_MODE_CURRENT,
+  CONTROL_MODE_CURRENT_BRAKE,
+  CONTROL_MODE_POS,
+  CONTROL_MODE_HANDBRAKE,
+  CONTROL_MODE_OPENLOOP,
+  CONTROL_MODE_OPENLOOP_PHASE,
+  CONTROL_MODE_OPENLOOP_DUTY,
+  CONTROL_MODE_OPENLOOP_DUTY_PHASE,
+  CONTROL_MODE_NONE
+} mc_control_mode;
+
+typedef enum
+{
+  DISP_POS_MODE_NONE = 0,
+  DISP_POS_MODE_INDUCTANCE,
+  DISP_POS_MODE_OBSERVER,
+  DISP_POS_MODE_ENCODER,
+  DISP_POS_MODE_PID_POS,
+  DISP_POS_MODE_PID_POS_ERROR,
+  DISP_POS_MODE_ENCODER_OBSERVER_ERROR
+} disp_pos_mode;
+
+typedef enum
+{
+  SENSOR_PORT_MODE_HALL = 0,
+  SENSOR_PORT_MODE_ABI,
+  SENSOR_PORT_MODE_AS5047_SPI,
+  SENSOR_PORT_MODE_AD2S1205,
+  SENSOR_PORT_MODE_SINCOS,
+  SENSOR_PORT_MODE_TS5700N8501,
+  SENSOR_PORT_MODE_TS5700N8501_MULTITURN
+} sensor_port_mode;
+
+typedef struct
+{
+  float cycle_int_limit;
+  float cycle_int_limit_running;
+  float cycle_int_limit_max;
+  float comm_time_sum;
+  float comm_time_sum_min_rpm;
+  int32_t comms;
+  float time_at_comm;
+} mc_rpm_dep_struct;
+
+typedef enum
+{
+  DRV8301_OC_LIMIT = 0,
+  DRV8301_OC_LATCH_SHUTDOWN,
+  DRV8301_OC_REPORT_ONLY,
+  DRV8301_OC_DISABLED
+} drv8301_oc_mode;
+
+typedef enum
+{
+  DEBUG_SAMPLING_OFF = 0,
+  DEBUG_SAMPLING_NOW,
+  DEBUG_SAMPLING_START,
+  DEBUG_SAMPLING_TRIGGER_START,
+  DEBUG_SAMPLING_TRIGGER_FAULT,
+  DEBUG_SAMPLING_TRIGGER_START_NOSEND,
+  DEBUG_SAMPLING_TRIGGER_FAULT_NOSEND,
+  DEBUG_SAMPLING_SEND_LAST_SAMPLES
+} debug_sampling_mode;
+
+typedef enum
+{
+  CAN_BAUD_125K = 0,
+  CAN_BAUD_250K,
+  CAN_BAUD_500K,
+  CAN_BAUD_1M,
+  CAN_BAUD_10K,
+  CAN_BAUD_20K,
+  CAN_BAUD_50K,
+  CAN_BAUD_75K
+} CAN_BAUD;
+
+typedef enum
+{
+  BATTERY_TYPE_LIION_3_0__4_2,
+  BATTERY_TYPE_LIIRON_2_6__3_6,
+  BATTERY_TYPE_LEAD_ACID
+} BATTERY_TYPE;
+
+typedef enum
+{
+  HFI_SAMPLES_8 = 0,
+  HFI_SAMPLES_16,
+  HFI_SAMPLES_32
+} FOC_HFI_SAMPLES;
+
+typedef struct
+{
+  // Switching and drive
+  mc_pwm_mode pwm_mode;
+  mc_comm_mode comm_mode;
+  mc_motor_type motor_type;
+  mc_sensor_mode sensor_mode;
+  // Limits
+  float l_current_max;
+  float l_current_min;
+  float l_in_current_max;
+  float l_in_current_min;
+  float l_abs_current_max;
+  float l_min_erpm;
+  float l_max_erpm;
+  float l_erpm_start;
+  float l_max_erpm_fbrake;
+  float l_max_erpm_fbrake_cc;
+  float l_min_vin;
+  float l_max_vin;
+  float l_battery_cut_start;
+  float l_battery_cut_end;
+  bool l_slow_abs_current;
+  float l_temp_fet_start;
+  float l_temp_fet_end;
+  float l_temp_motor_start;
+  float l_temp_motor_end;
+  float l_temp_accel_dec;
+  float l_min_duty;
+  float l_max_duty;
+  float l_watt_max;
+  float l_watt_min;
+  float l_current_max_scale;
+  float l_current_min_scale;
+  float l_duty_start;
+  // Overridden limits (Computed during runtime)
+  float lo_current_max;
+  float lo_current_min;
+  float lo_in_current_max;
+  float lo_in_current_min;
+  float lo_current_motor_max_now;
+  float lo_current_motor_min_now;
+  // Sensorless (bldc)
+  float sl_min_erpm;
+  float sl_min_erpm_cycle_int_limit;
+  float sl_max_fullbreak_current_dir_change;
+  float sl_cycle_int_limit;
+  float sl_phase_advance_at_br;
+  float sl_cycle_int_rpm_br;
+  float sl_bemf_coupling_k;
+  // Hall sensor
+  int8_t hall_table[8];
+  float hall_sl_erpm;
+  // FOC
+  float foc_current_kp;
+  float foc_current_ki;
+  float foc_f_sw;
+  float foc_dt_us;
+  float foc_encoder_offset;
+  bool foc_encoder_inverted;
+  float foc_encoder_ratio;
+  float foc_encoder_sin_offset;
+  float foc_encoder_sin_gain;
+  float foc_encoder_cos_offset;
+  float foc_encoder_cos_gain;
+  float foc_encoder_sincos_filter_constant;
+  float foc_motor_l;
+  float foc_motor_r;
+  float foc_motor_flux_linkage;
+  float foc_observer_gain;
+  float foc_observer_gain_slow;
+  float foc_pll_kp;
+  float foc_pll_ki;
+  float foc_duty_dowmramp_kp;
+  float foc_duty_dowmramp_ki;
+  float foc_openloop_rpm;
+  float foc_sl_openloop_hyst;
+  float foc_sl_openloop_time;
+  float foc_sl_d_current_duty;
+  float foc_sl_d_current_factor;
+  mc_foc_sensor_mode foc_sensor_mode;
+  uint8_t foc_hall_table[8];
+  float foc_sl_erpm;
+  bool foc_sample_v0_v7;
+  bool foc_sample_high_current;
+  float foc_sat_comp;
+  bool foc_temp_comp;
+  float foc_temp_comp_base_temp;
+  float foc_current_filter_const;
+  mc_foc_cc_decoupling_mode foc_cc_decoupling;
+  mc_foc_observer_type foc_observer_type;
+  float foc_hfi_voltage_start;
+  float foc_hfi_voltage_run;
+  float foc_hfi_voltage_max;
+  float foc_sl_erpm_hfi;
+  uint16_t foc_hfi_start_samples;
+  float foc_hfi_obs_ovr_sec;
+  FOC_HFI_SAMPLES foc_hfi_samples;
+  // GPDrive
+  int gpd_buffer_notify_left;
+  int gpd_buffer_interpol;
+  float gpd_current_filter_const;
+  float gpd_current_kp;
+  float gpd_current_ki;
+  // Speed PID
+  float s_pid_kp;
+  float s_pid_ki;
+  float s_pid_kd;
+  float s_pid_kd_filter;
+  float s_pid_min_erpm;
+  bool s_pid_allow_braking;
+  // Pos PID
+  float p_pid_kp;
+  float p_pid_ki;
+  float p_pid_kd;
+  float p_pid_kd_filter;
+  float p_pid_ang_div;
+  // Current controller
+  float cc_startup_boost_duty;
+  float cc_min_current;
+  float cc_gain;
+  float cc_ramp_step_max;
+  // Misc
+  int32_t m_fault_stop_time_ms;
+  float m_duty_ramp_step;
+  float m_current_backoff_gain;
+  uint32_t m_encoder_counts;
+  sensor_port_mode m_sensor_port_mode;
+  bool m_invert_direction;
+  drv8301_oc_mode m_drv8301_oc_mode;
+  int m_drv8301_oc_adj;
+  float m_bldc_f_sw_min;
+  float m_bldc_f_sw_max;
+  float m_dc_f_sw;
+  float m_ntc_motor_beta;
+  out_aux_mode m_out_aux_mode;
+  temp_sensor_type m_motor_temp_sens_type;
+  float m_ptc_motor_coeff;
+  // Setup info
+  uint8_t si_motor_poles;
+  float si_gear_ratio;
+  float si_wheel_diameter;
+  BATTERY_TYPE si_battery_type;
+  int si_battery_cells;
+  float si_battery_ah;
+} mc_configuration;
+
+// Applications to use
+typedef enum
+{
+  APP_NONE = 0,
+  APP_PPM,
+  APP_ADC,
+  APP_UART,
+  APP_PPM_UART,
+  APP_ADC_UART,
+  APP_NUNCHUK,
+  APP_NRF,
+  APP_CUSTOM,
+  APP_BALANCE
+} app_use;
+
+// Throttle curve mode
+typedef enum
+{
+  THR_EXP_EXPO = 0,
+  THR_EXP_NATURAL,
+  THR_EXP_POLY
+} thr_exp_mode;
+
+// PPM control types
+typedef enum
+{
+  PPM_CTRL_TYPE_NONE = 0,
+  PPM_CTRL_TYPE_CURRENT,
+  PPM_CTRL_TYPE_CURRENT_NOREV,
+  PPM_CTRL_TYPE_CURRENT_NOREV_BRAKE,
+  PPM_CTRL_TYPE_DUTY,
+  PPM_CTRL_TYPE_DUTY_NOREV,
+  PPM_CTRL_TYPE_PID,
+  PPM_CTRL_TYPE_PID_NOREV,
+  PPM_CTRL_TYPE_CURRENT_BRAKE_REV_HYST,
+  PPM_CTRL_TYPE_CURRENT_SMART_REV
+} ppm_control_type;
+
+typedef struct
+{
+  ppm_control_type ctrl_type;
+  float pid_max_erpm;
+  float hyst;
+  float pulse_start;
+  float pulse_end;
+  float pulse_center;
+  bool median_filter;
+  bool safe_start;
+  float throttle_exp;
+  float throttle_exp_brake;
+  thr_exp_mode throttle_exp_mode;
+  float ramp_time_pos;
+  float ramp_time_neg;
+  bool multi_esc;
+  bool tc;
+  float tc_max_diff;
+  float max_erpm_for_dir;
+  float smart_rev_max_duty;
+  float smart_rev_ramp_time;
+} ppm_config;
+
+// ADC control types
+typedef enum
+{
+  ADC_CTRL_TYPE_NONE = 0,
+  ADC_CTRL_TYPE_CURRENT,
+  ADC_CTRL_TYPE_CURRENT_REV_CENTER,
+  ADC_CTRL_TYPE_CURRENT_REV_BUTTON,
+  ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_ADC,
+  ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER,
+  ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER,
+  ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON,
+  ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_ADC,
+  ADC_CTRL_TYPE_DUTY,
+  ADC_CTRL_TYPE_DUTY_REV_CENTER,
+  ADC_CTRL_TYPE_DUTY_REV_BUTTON,
+  ADC_CTRL_TYPE_PID,
+  ADC_CTRL_TYPE_PID_REV_CENTER,
+  ADC_CTRL_TYPE_PID_REV_BUTTON
+} adc_control_type;
+
+typedef struct
+{
+  adc_control_type ctrl_type;
+  float hyst;
+  float voltage_start;
+  float voltage_end;
+  float voltage_center;
+  float voltage2_start;
+  float voltage2_end;
+  bool use_filter;
+  bool safe_start;
+  bool cc_button_inverted;
+  bool rev_button_inverted;
+  bool voltage_inverted;
+  bool voltage2_inverted;
+  float throttle_exp;
+  float throttle_exp_brake;
+  thr_exp_mode throttle_exp_mode;
+  float ramp_time_pos;
+  float ramp_time_neg;
+  bool multi_esc;
+  bool tc;
+  float tc_max_diff;
+  uint32_t update_rate_hz;
+} adc_config;
+
+// Nunchuk control types
+typedef enum
+{
+  CHUK_CTRL_TYPE_NONE = 0,
+  CHUK_CTRL_TYPE_CURRENT,
+  CHUK_CTRL_TYPE_CURRENT_NOREV
+} chuk_control_type;
+
+typedef struct
+{
+  chuk_control_type ctrl_type;
+  float hyst;
+  float ramp_time_pos;
+  float ramp_time_neg;
+  float stick_erpm_per_s_in_cc;
+  float throttle_exp;
+  float throttle_exp_brake;
+  thr_exp_mode throttle_exp_mode;
+  bool multi_esc;
+  bool tc;
+  float tc_max_diff;
+  bool use_smart_rev;
+  float smart_rev_max_duty;
+  float smart_rev_ramp_time;
+} chuk_config;
+
+// NRF Datatypes
+typedef enum
+{
+  NRF_SPEED_250K = 0,
+  NRF_SPEED_1M,
+  NRF_SPEED_2M
+} NRF_SPEED;
+
+typedef enum
+{
+  NRF_POWER_M18DBM = 0,
+  NRF_POWER_M12DBM,
+  NRF_POWER_M6DBM,
+  NRF_POWER_0DBM,
+  NRF_POWER_OFF
+} NRF_POWER;
+
+typedef enum
+{
+  NRF_AW_3 = 0,
+  NRF_AW_4,
+  NRF_AW_5
+} NRF_AW;
+
+typedef enum
+{
+  NRF_CRC_DISABLED = 0,
+  NRF_CRC_1B,
+  NRF_CRC_2B
+} NRF_CRC;
+
+typedef enum
+{
+  NRF_RETR_DELAY_250US = 0,
+  NRF_RETR_DELAY_500US,
+  NRF_RETR_DELAY_750US,
+  NRF_RETR_DELAY_1000US,
+  NRF_RETR_DELAY_1250US,
+  NRF_RETR_DELAY_1500US,
+  NRF_RETR_DELAY_1750US,
+  NRF_RETR_DELAY_2000US,
+  NRF_RETR_DELAY_2250US,
+  NRF_RETR_DELAY_2500US,
+  NRF_RETR_DELAY_2750US,
+  NRF_RETR_DELAY_3000US,
+  NRF_RETR_DELAY_3250US,
+  NRF_RETR_DELAY_3500US,
+  NRF_RETR_DELAY_3750US,
+  NRF_RETR_DELAY_4000US
+} NRF_RETR_DELAY;
+
+typedef struct
+{
+  NRF_SPEED speed;
+  NRF_POWER power;
+  NRF_CRC crc_type;
+  NRF_RETR_DELAY retry_delay;
+  unsigned char retries;
+  unsigned char channel;
+  unsigned char address[3];
+  bool send_crc_ack;
+} nrf_config;
+
+typedef struct
+{
+  float kp;
+  float ki;
+  float kd;
+  uint16_t hertz;
+  float pitch_fault;
+  float roll_fault;
+  float adc1;
+  float adc2;
+  float overspeed_duty;
+  float tiltback_duty;
+  float tiltback_angle;
+  float tiltback_speed;
+  float tiltback_high_voltage;
+  float tiltback_low_voltage;
+  float startup_pitch_tolerance;
+  float startup_roll_tolerance;
+  float startup_speed;
+  float deadzone;
+  float current_boost;
+  bool multi_esc;
+  float yaw_kp;
+  float yaw_ki;
+  float yaw_kd;
+  float roll_steer_kp;
+  float brake_current;
+  uint16_t overspeed_delay;
+  uint16_t fault_delay;
+  float tiltback_constant;
+  float roll_steer_erpm_kp;
+  float yaw_current_clamp;
+  uint16_t adc_half_fault_erpm;
+  float setpoint_pitch_filter;
+  float setpoint_target_filter;
+  float setpoint_clamp;
+} balance_config;
+
+// CAN status modes
+typedef enum
+{
+  CAN_STATUS_DISABLED = 0,
+  CAN_STATUS_1,
+  CAN_STATUS_1_2,
+  CAN_STATUS_1_2_3,
+  CAN_STATUS_1_2_3_4,
+  CAN_STATUS_1_2_3_4_5
+} CAN_STATUS_MODE;
+
+typedef enum
+{
+  SHUTDOWN_MODE_ALWAYS_OFF = 0,
+  SHUTDOWN_MODE_ALWAYS_ON,
+  SHUTDOWN_MODE_TOGGLE_BUTTON_ONLY,
+  SHUTDOWN_MODE_OFF_AFTER_10S,
+  SHUTDOWN_MODE_OFF_AFTER_1M,
+  SHUTDOWN_MODE_OFF_AFTER_5M,
+  SHUTDOWN_MODE_OFF_AFTER_10M,
+  SHUTDOWN_MODE_OFF_AFTER_30M,
+  SHUTDOWN_MODE_OFF_AFTER_1H,
+  SHUTDOWN_MODE_OFF_AFTER_5H,
+} SHUTDOWN_MODE;
+
+typedef enum
+{
+  CAN_MODE_VESC = 0,
+  CAN_MODE_UAVCAN,
+  CAN_MODE_COMM_BRIDGE
+} CAN_MODE;
+
+typedef struct
+{
+  // Settings
+  uint8_t controller_id;
+  uint32_t timeout_msec;
+  float timeout_brake_current;
+  CAN_STATUS_MODE send_can_status;
+  uint32_t send_can_status_rate_hz;
+  CAN_BAUD can_baud_rate;
+  bool pairing_done;
+  bool permanent_uart_enabled;
+  SHUTDOWN_MODE shutdown_mode;
+
+  // CAN modes
+  CAN_MODE can_mode;
+  uint8_t uavcan_esc_index;
+
+  // Application to use
+  app_use app_to_use;
+
+  // PPM application settings
+  ppm_config app_ppm_conf;
+
+  // ADC application settings
+  adc_config app_adc_conf;
+
+  // UART application settings
+  uint32_t app_uart_baudrate;
+
+  // Nunchuk application settings
+  chuk_config app_chuk_conf;
+
+  // NRF application settings
+  nrf_config app_nrf_conf;
+
+  // Balance application settings
+  balance_config app_balance_conf;
+
+} app_configuration;
+
+// Communication commands
+typedef enum
+{
+  COMM_FW_VERSION = 0,
+  COMM_JUMP_TO_BOOTLOADER,
+  COMM_ERASE_NEW_APP,
+  COMM_WRITE_NEW_APP_DATA,
+  COMM_GET_VALUES,
+  COMM_SET_DUTY,
+  COMM_SET_CURRENT,
+  COMM_SET_CURRENT_BRAKE,
+  COMM_SET_RPM,
+  COMM_SET_POS,
+  COMM_SET_HANDBRAKE,
+  COMM_SET_DETECT,
+  COMM_SET_SERVO_POS,
+  COMM_SET_MCCONF,
+  COMM_GET_MCCONF,
+  COMM_GET_MCCONF_DEFAULT,
+  COMM_SET_APPCONF,
+  COMM_GET_APPCONF,
+  COMM_GET_APPCONF_DEFAULT,
+  COMM_SAMPLE_PRINT,
+  COMM_TERMINAL_CMD,
+  COMM_PRINT,
+  COMM_ROTOR_POSITION,
+  COMM_EXPERIMENT_SAMPLE,
+  COMM_DETECT_MOTOR_PARAM,
+  COMM_DETECT_MOTOR_R_L,
+  COMM_DETECT_MOTOR_FLUX_LINKAGE,
+  COMM_DETECT_ENCODER,
+  COMM_DETECT_HALL_FOC,
+  COMM_REBOOT,
+  COMM_ALIVE,
+  COMM_GET_DECODED_PPM,
+  COMM_GET_DECODED_ADC,
+  COMM_GET_DECODED_CHUK,
+  COMM_FORWARD_CAN,
+  COMM_SET_CHUCK_DATA,
+  COMM_CUSTOM_APP_DATA,
+  COMM_NRF_START_PAIRING,
+  COMM_GPD_SET_FSW,
+  COMM_GPD_BUFFER_NOTIFY,
+  COMM_GPD_BUFFER_SIZE_LEFT,
+  COMM_GPD_FILL_BUFFER,
+  COMM_GPD_OUTPUT_SAMPLE,
+  COMM_GPD_SET_MODE,
+  COMM_GPD_FILL_BUFFER_INT8,
+  COMM_GPD_FILL_BUFFER_INT16,
+  COMM_GPD_SET_BUFFER_INT_SCALE,
+  COMM_GET_VALUES_SETUP,
+  COMM_SET_MCCONF_TEMP,
+  COMM_SET_MCCONF_TEMP_SETUP,
+  COMM_GET_VALUES_SELECTIVE,
+  COMM_GET_VALUES_SETUP_SELECTIVE,
+  COMM_EXT_NRF_PRESENT,
+  COMM_EXT_NRF_ESB_SET_CH_ADDR,
+  COMM_EXT_NRF_ESB_SEND_DATA,
+  COMM_EXT_NRF_ESB_RX_DATA,
+  COMM_EXT_NRF_SET_ENABLED,
+  COMM_DETECT_MOTOR_FLUX_LINKAGE_OPENLOOP,
+  COMM_DETECT_APPLY_ALL_FOC,
+  COMM_JUMP_TO_BOOTLOADER_ALL_CAN,
+  COMM_ERASE_NEW_APP_ALL_CAN,
+  COMM_WRITE_NEW_APP_DATA_ALL_CAN,
+  COMM_PING_CAN,
+  COMM_APP_DISABLE_OUTPUT,
+  COMM_TERMINAL_CMD_SYNC,
+  COMM_BM_CONNECT,
+  COMM_BM_ERASE_FLASH_ALL,
+  COMM_BM_WRITE_FLASH,
+  COMM_BM_REBOOT,
+  COMM_BM_DISCONNECT,
+  COMM_BM_MAP_PINS_DEFAULT,
+  COMM_BM_MAP_PINS_NRF5X,
+  COMM_ERASE_BOOTLOADER,
+  COMM_ERASE_BOOTLOADER_ALL_CAN,
+  COMM_PLOT_INIT,
+  COMM_PLOT_DATA,
+  COMM_PLOT_ADD_GRAPH,
+  COMM_PLOT_SET_GRAPH,
+  COMM_GET_DECODED_BALANCE,
+  COMM_BM_MEM_READ,
+  COMM_WRITE_NEW_APP_DATA_LZO,
+  COMM_WRITE_NEW_APP_DATA_ALL_CAN_LZO,
+  COMM_BM_WRITE_FLASH_LZO,
+  COMM_SET_CURRENT_REL,
+  COMM_CAN_FWD_FRAME,
+  COMM_SET_BATTERY_CUT,
+  COMM_SET_BLE_NAME,
+  COMM_SET_BLE_PIN,
+  COMM_SET_CAN_MODE,
+} COMM_PACKET_ID;
+
+// CAN commands
+typedef enum
+{
+  CAN_PACKET_SET_DUTY = 0,
+  CAN_PACKET_SET_CURRENT,
+  CAN_PACKET_SET_CURRENT_BRAKE,
+  CAN_PACKET_SET_RPM,
+  CAN_PACKET_SET_POS,
+  CAN_PACKET_FILL_RX_BUFFER,
+  CAN_PACKET_FILL_RX_BUFFER_LONG,
+  CAN_PACKET_PROCESS_RX_BUFFER,
+  CAN_PACKET_PROCESS_SHORT_BUFFER,
+  CAN_PACKET_STATUS,
+  CAN_PACKET_SET_CURRENT_REL,
+  CAN_PACKET_SET_CURRENT_BRAKE_REL,
+  CAN_PACKET_SET_CURRENT_HANDBRAKE,
+  CAN_PACKET_SET_CURRENT_HANDBRAKE_REL,
+  CAN_PACKET_STATUS_2,
+  CAN_PACKET_STATUS_3,
+  CAN_PACKET_STATUS_4,
+  CAN_PACKET_PING,
+  CAN_PACKET_PONG,
+  CAN_PACKET_DETECT_APPLY_ALL_FOC,
+  CAN_PACKET_DETECT_APPLY_ALL_FOC_RES,
+  CAN_PACKET_CONF_CURRENT_LIMITS,
+  CAN_PACKET_CONF_STORE_CURRENT_LIMITS,
+  CAN_PACKET_CONF_CURRENT_LIMITS_IN,
+  CAN_PACKET_CONF_STORE_CURRENT_LIMITS_IN,
+  CAN_PACKET_CONF_FOC_ERPMS,
+  CAN_PACKET_CONF_STORE_FOC_ERPMS,
+  CAN_PACKET_STATUS_5,
+  CAN_PACKET_POLL_TS5700N8501_STATUS,
+  CAN_PACKET_CONF_BATTERY_CUT,
+  CAN_PACKET_CONF_STORE_BATTERY_CUT,
+  CAN_PACKET_SHUTDOWN
+} CAN_PACKET_ID;
+
+// Logged fault data
+typedef struct
+{
+  uint8_t motor;
+  mc_fault_code fault;
+  float current;
+  float current_filtered;
+  float voltage;
+  float gate_driver_voltage;
+  float duty;
+  float rpm;
+  int tacho;
+  int cycles_running;
+  int tim_val_samp;
+  int tim_current_samp;
+  int tim_top;
+  int comm_step;
+  float temperature;
+  int drv8301_faults;
+} fault_data;
+
+// External LED state
+typedef enum
+{
+  LED_EXT_OFF = 0,
+  LED_EXT_NORMAL,
+  LED_EXT_BRAKE,
+  LED_EXT_TURN_LEFT,
+  LED_EXT_TURN_RIGHT,
+  LED_EXT_BRAKE_TURN_LEFT,
+  LED_EXT_BRAKE_TURN_RIGHT,
+  LED_EXT_BATT
+} LED_EXT_STATE;
+
+typedef struct
+{
+  int js_x;
+  int js_y;
+  int acc_x;
+  int acc_y;
+  int acc_z;
+  bool bt_c;
+  bool bt_z;
+  bool rev_has_state;
+  bool is_rev;
+} chuck_data;
+
+typedef struct
+{
+  int id;
+  systime_t rx_time;
+  float rpm;
+  float current;
+  float duty;
+} can_status_msg;
+
+typedef struct
+{
+  int id;
+  systime_t rx_time;
+  float amp_hours;
+  float amp_hours_charged;
+} can_status_msg_2;
+
+typedef struct
+{
+  int id;
+  systime_t rx_time;
+  float watt_hours;
+  float watt_hours_charged;
+} can_status_msg_3;
+
+typedef struct
+{
+  int id;
+  systime_t rx_time;
+  float temp_fet;
+  float temp_motor;
+  float current_in;
+  float pid_pos_now;
+} can_status_msg_4;
+
+typedef struct
+{
+  int id;
+  systime_t rx_time;
+  float v_in;
+  int32_t tacho_value;
+} can_status_msg_5;
+
+typedef struct
+{
+  uint8_t js_x;
+  uint8_t js_y;
+  bool bt_c;
+  bool bt_z;
+  bool bt_push;
+  bool rev_has_state;
+  bool is_rev;
+  float vbat;
+} mote_state;
+
+typedef enum
+{
+  MOTE_PACKET_BATT_LEVEL = 0,
+  MOTE_PACKET_BUTTONS,
+  MOTE_PACKET_ALIVE,
+  MOTE_PACKET_FILL_RX_BUFFER,
+  MOTE_PACKET_FILL_RX_BUFFER_LONG,
+  MOTE_PACKET_PROCESS_RX_BUFFER,
+  MOTE_PACKET_PROCESS_SHORT_BUFFER,
+  MOTE_PACKET_PAIRING_INFO
+} MOTE_PACKET;
+
+typedef struct
+{
+  float v_in;
+  float temp_mos;
+  float temp_mos_1;
+  float temp_mos_2;
+  float temp_mos_3;
+  float temp_motor;
+  float current_motor;
+  float current_in;
+  float id;
+  float iq;
+  float rpm;
+  float duty_now;
+  float amp_hours;
+  float amp_hours_charged;
+  float watt_hours;
+  float watt_hours_charged;
+  int tachometer;
+  int tachometer_abs;
+  float position;
+  mc_fault_code fault_code;
+  int vesc_id;
+  float vd;
+  float vq;
+} mc_values;
+
+typedef enum
+{
+  NRF_PAIR_STARTED = 0,
+  NRF_PAIR_OK,
+  NRF_PAIR_FAIL
+} NRF_PAIR_RES;
+
+// Orientation data
+typedef struct
+{
+  float q0;
+  float q1;
+  float q2;
+  float q3;
+  float integralFBx;
+  float integralFBy;
+  float integralFBz;
+  float accMagP;
+  int initialUpdateDone;
+} ATTITUDE_INFO;
+
+// Custom EEPROM variables
+typedef union {
+  uint32_t as_u32;
+  int32_t as_i32;
+  float as_float;
+} eeprom_var;
+
+#define EEPROM_VARS_HW            64
+#define EEPROM_VARS_CUSTOM        64
+
+typedef struct
+{
+  float ah_tot;
+  float ah_charge_tot;
+  float wh_tot;
+  float wh_charge_tot;
+  float current_tot;
+  float current_in_tot;
+  uint8_t num_vescs;
+} setup_values;
+}  // namespace vesc_nexus
+#endif  // VESC_DRIVER__DATATYPES_HPP_
+
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\include\vesc_nexus\message_translator.hpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\include\vesc_nexus\message_translator.hpp
+# ----------------------------------------------------------------------------
+// message_translator.hpp
+#pragma once
+
+#include <linux/can.h>
+#include <vesc_msgs/msg/vesc_state.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <cstdint>
+#include <vesc_msgs/msg/vesc_state.hpp>
+
+namespace vesc_nexus {
+
+struct CommandLimits {
+    double duty_cycle_min = -1.0;
+    double duty_cycle_max = 1.0;
+    double current_min = -10.0;
+    double current_max = 10.0;
+    double speed_min = -23250.0;
+    double speed_max = 23250.0;
+    double brake_min = -20000.0;
+    double brake_max = 200000.0;
+    double position_min = 0.0;
+    double position_max = 360.0;
+    double servo_min = 0.15;
+    double servo_max = 0.85;
+};
+
+// CAN Packet IDs (из спецификации)
+enum CanPacketId : uint8_t {
+    CAN_PACKET_SET_DUTY = 0,
+    CAN_PACKET_SET_CURRENT = 1,
+    CAN_PACKET_SET_CURRENT_BRAKE = 2,
+    CAN_PACKET_SET_RPM = 3,
+    CAN_PACKET_SET_POS = 4,
+    // ... другие, если нужно
+    CAN_PACKET_STATUS = 9,
+    CAN_PACKET_STATUS_2 = 14,
+    CAN_PACKET_STATUS_3 = 15,
+    CAN_PACKET_STATUS_4 = 16,
+    CAN_PACKET_STATUS_5 = 27,
+    CAN_PACKET_STATUS_6 = 58
+};
+
+// Утилита: big-endian запись
+void buffer_append_int32(uint8_t* buffer, int32_t number, int& index);
+void buffer_append_int16(uint8_t* buffer, int16_t number, int& index);
+
+// Команды
+can_frame createSetDutyCycleFrame(uint8_t can_id, double duty);
+can_frame createSetCurrentFrame(uint8_t can_id, double current);
+can_frame createSetSpeedFrame(uint8_t can_id, double rpm);
+can_frame createSetBrakeFrame(uint8_t can_id, double brake);
+can_frame createSetPositionFrame(uint8_t can_id, double pos);
+
+// Парсинг входящих статусов
+void parseStatusPacket(const can_frame& frame, vesc_msgs::msg::VescState& state);
+void parseStatus2Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);
+void parseStatus4Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);
+void parseStatus5Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);
+
+} // namespace vesc_nexus
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\include\vesc_nexus\odometry_publisher.hpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\include\vesc_nexus\odometry_publisher.hpp
+# ----------------------------------------------------------------------------
+// include/vesc_nexus/odometry_publisher.hpp
+#pragma once
+
+#include <nav_msgs/msg/odometry.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <vector>
+#include "vesc_handler.hpp"
+
+class OdometryPublisher {
+public:
+    using PublishOdomFunc = std::function<void(const nav_msgs::msg::Odometry&)>;
+    using SendTfFunc = std::function<void(const geometry_msgs::msg::TransformStamped&)>;
+    using NowFunc = std::function<rclcpp::Time()>;
+
+    OdometryPublisher(const std::vector<VescHandler*>& vesc_handlers,
+                      PublishOdomFunc publish_odom,
+                      SendTfFunc send_tf,
+                      NowFunc now,
+                      double wheel_base = 0.5,
+                      double wheel_radius = 0.1);
+
+    void publish();
+
+private:
+    std::vector<VescHandler*> vesc_handlers_;
+    PublishOdomFunc publish_odom_func_;
+    SendTfFunc send_tf_func_;
+    NowFunc now_func_;
+
+    double wheel_base_;
+    double wheel_radius_;
+
+    double x_ = 0.0, y_ = 0.0, theta_ = 0.0;
+    rclcpp::Time last_publish_time_;
+    nav_msgs::msg::Odometry odom_msg_;
+    geometry_msgs::msg::TransformStamped transform_stamped_;
+};
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\include\vesc_nexus\vesc_handler.hpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\include\vesc_nexus\vesc_handler.hpp
+# ----------------------------------------------------------------------------
+// vesc_handler.hpp
+#pragma once
+
+#include <linux/can.h>
+#include <functional>
+#include <string>
+#include "message_translator.hpp"
+#include <vesc_msgs/msg/vesc_state.hpp>
+
+class VescHandler {
+public:
+    using SendCanFrameFunc = std::function<bool(const struct can_frame&)>;
+    using StateUpdateCallback = std::function<void(const vesc_msgs::msg::VescState&)>;
+
+    VescHandler(uint8_t can_id, const std::string& label,
+                double wheel_radius, int poles, int64_t min_erpm,
+                const vesc_nexus::CommandLimits& limits);
+
+    void setSendCanFunc(SendCanFrameFunc func);
+    void setStateUpdateCallback(StateUpdateCallback cb);
+
+    void processCanFrame(const struct can_frame& frame);
+    void requestState();  // Отправить COMM_GET_VALUES
+    void sendDutyCycle(double duty);
+    void sendCurrent(double current);
+    void sendSpeed(double linear_speed);
+    void sendBrake(double brake);
+    void sendPosition(double pos);
+
+    uint8_t getCanId() const;
+    std::string getLabel() const;
+    vesc_msgs::msg::VescState getLastState() const;
+
+private:
+    uint8_t can_id_;
+    std::string label_;
+    vesc_nexus::CommandLimits limits_;
+    vesc_msgs::msg::VescState last_state_;
+
+    SendCanFrameFunc send_can_func_;
+    StateUpdateCallback state_update_cb_;
+    
+    double wheel_radius_;     // радиус колеса
+    int pole_pairs_;          // количество пар полюсов (poles / 2)
+    int64_t min_erpm_;         // минимальный ERPM для движения
+};
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\launch\vesc_nexus_node.launch.py
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\launch\vesc_nexus_node.launch.py
+# ----------------------------------------------------------------------------
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.substitutions import PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterFile
+from launch_ros.substitutions import FindPackageShare
+
+import rclpy.logging
+
+# Создаем логгер для вывода отладочной информации
+logger = rclpy.logging.get_logger("vesc_nexus.launch")
+
+def launch_setup(context):
+    # Создаем подстановку для пути к YAML-файлу
+    config_path_subst = PathJoinSubstitution([
+        FindPackageShare('vesc_nexus'), 'config', 'vesc_nexus_config.yaml'
+    ])
+
+    # Выполняем подстановку и получаем фактический путь
+    config_path_str = config_path_subst.perform(context)
+    logger.info(f"Resolved configuration file path: {config_path_str}")
+
+    # Читаем содержимое файла
+    with open(config_path_str, 'r') as file:
+        config_content = file.read()
+    
+    # Логируем содержимое файла
+    logger.info(f"Configuration file content:\n{config_content}")
+    
+    # Создаем описание параметров
+    file_parameters = ParameterFile(
+        param_file=config_path_subst,
+        allow_substs=True
+    )
+
+    # Возвращаем ноду с параметрами
+    return [
+        Node(
+            package='vesc_nexus',
+            executable='vesc_can_driver_node',
+            name='vesc_can_driver',
+            parameters=[file_parameters],
+            output='screen',
+            emulate_tty=True,  # Красивый вывод (цвета, логи в реальном времени)
+            respawn=True,      # Перезапуск при падении (опционально)
+            respawn_delay=2    # Задержка перед перезапуском
+        )
+    ]
+
+def generate_launch_description():
+    # Объявляем аргументы (если нужны)
+    declared_args = []
+
+    # Возвращаем описание запуска
+    return LaunchDescription(declared_args + [
+        OpaqueFunction(function=launch_setup)
+    ])
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\src\can_interface.cpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\src\can_interface.cpp
+# ----------------------------------------------------------------------------
+// can_interface.cpp
+#include "vesc_nexus/can_interface.hpp"
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <linux/can.h>
+#include <linux/can/raw.h>
+#include <unistd.h>
+#include <cstring>
+#include <iostream>
+#include <cerrno>
+#include <rclcpp/rclcpp.hpp>
+
+CanInterface::CanInterface(const std::string& interface_name)
+    : interface_name_(interface_name), socket_(-1), running_(false) {}
+
+CanInterface::~CanInterface() {
+    close();
+}
+
+bool CanInterface::open() {
+    if (running_) return true;
+
+    struct sockaddr_can addr;
+    struct ifreq ifr;
+
+    socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
+    if (socket_ < 0) {
+        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Failed to create CAN socket");
+        return false;
+    }
+
+    std::strcpy(ifr.ifr_name, interface_name_.c_str());
+    if (ioctl(socket_, SIOCGIFINDEX, &ifr) < 0) {
+        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Cannot find CAN interface: %s", interface_name_.c_str());
+        ::close(socket_);
+        socket_ = -1;
+        return false;
+    }
+
+    addr.can_family = AF_CAN;
+    addr.can_ifindex = ifr.ifr_ifindex;
+
+    if (::bind(socket_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Cannot bind to CAN socket");
+        ::close(socket_);
+        socket_ = -1;
+        return false;
+    }
+
+    running_ = true;
+    receive_thread_ = std::thread(&CanInterface::receiveLoop, this);
+
+    RCLCPP_INFO(rclcpp::get_logger("CanInterface"), "CAN interface %s opened successfully", interface_name_.c_str());
+    return true;
+}
+
+void CanInterface::close() {
+    if (running_) {
+        running_ = false;
+        if (receive_thread_.joinable()) {
+            receive_thread_.join();
+        }
+        if (socket_ >= 0) {
+            ::close(socket_);
+            socket_ = -1;
+        }
+        RCLCPP_INFO(rclcpp::get_logger("CanInterface"), "CAN interface closed");
+    }
+}
+
+// can_interface.cpp
+bool CanInterface::sendFrame(const struct can_frame& frame) {
+    std::lock_guard<std::mutex> lock(socket_mutex_);
+    if (!running_ || socket_ < 0) {
+        RCLCPP_WARN(rclcpp::get_logger("CanInterface"), "Attempted to send CAN frame, but interface is not running");
+        return false;
+    }
+
+    // 🔹 Логируем отправку CAN-фрейма
+    //RCLCPP_INFO(rclcpp::get_logger("CanInterface"),
+    //             "Sending CAN frame: ID=0x%X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+    //             frame.can_id, frame.can_dlc,
+    //             frame.data[0], frame.data[1], frame.data[2], frame.data[3],
+    //             frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
+
+    int nbytes = ::write(socket_, &frame, sizeof(struct can_frame));
+    if (nbytes != sizeof(struct can_frame)) {
+        int err = errno;
+        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"),
+                     "Failed to send CAN frame: write() returned %d, errno=%d (%s)",
+                     nbytes, err, strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
+void CanInterface::setReceiveCallback(CanFrameCallback cb) {
+    callback_ = cb;
+}
+
+bool CanInterface::isRunning() const {
+    return running_;
+}
+
+void CanInterface::receiveLoop() {
+    struct can_frame frame;
+    while (running_) {
+        int nbytes = ::read(socket_, &frame, sizeof(struct can_frame));
+        if (nbytes > 0 && callback_) {
+            callback_(frame);
+        } else if (nbytes < 0) {
+            if (errno != EAGAIN) {
+                RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Error reading CAN socket");
+                break;
+            }
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\src\message_translator.cpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\src\message_translator.cpp
+# ----------------------------------------------------------------------------
+// message_translator.cpp
+#include "vesc_nexus/message_translator.hpp"
+#include <cstring>
+#include <algorithm>
+
+void vesc_nexus::buffer_append_int32(uint8_t* buffer, int32_t number, int& index) {
+    buffer[index++] = (number >> 24) & 0xFF;
+    buffer[index++] = (number >> 16) & 0xFF;
+    buffer[index++] = (number >> 8) & 0xFF;
+    buffer[index++] = number & 0xFF;
+}
+
+void vesc_nexus::buffer_append_int16(uint8_t* buffer, int16_t number, int& index) {
+    buffer[index++] = (number >> 8) & 0xFF;
+    buffer[index++] = number & 0xFF;
+}
+
+can_frame vesc_nexus::createSetDutyCycleFrame(uint8_t can_id, double duty) {
+    can_frame frame;
+    frame.can_id = ((CAN_PACKET_SET_DUTY << 8) | can_id) | CAN_EFF_FLAG;
+    frame.can_dlc = 4;
+
+    int32_t value = static_cast<int32_t>(std::clamp(duty, -1.0, 1.0) * 100000.0);
+    frame.data[0] = (value >> 24) & 0xFF;
+    frame.data[1] = (value >> 16) & 0xFF;
+    frame.data[2] = (value >> 8)  & 0xFF;
+    frame.data[3] = value        & 0xFF;
+
+    return frame;
+}
+
+can_frame vesc_nexus::createSetCurrentFrame(uint8_t can_id, double current) {
+    can_frame frame;
+    frame.can_id = (can_id) | (CAN_PACKET_SET_CURRENT << 8);
+    frame.can_id |= CAN_EFF_FLAG;
+    frame.can_dlc = 4;
+    int index = 0;
+    int32_t value = static_cast<int32_t>(std::clamp(current, -10.0, 10.0) * 1000.0);
+    buffer_append_int32(frame.data, value, index);
+    return frame;
+}
+
+// message_translator.cpp
+// В message_translator.cpp
+can_frame vesc_nexus::createSetSpeedFrame(uint8_t can_id, double rpm) {
+    can_frame frame;
+    // Обнуляем весь фрейм
+    std::memset(&frame, 0, sizeof(frame));
+
+    frame.can_id = ((CAN_PACKET_SET_RPM << 8) | can_id) | CAN_EFF_FLAG;
+    frame.can_dlc = 4;
+
+    int32_t value = static_cast<int32_t>(std::clamp(rpm, -23250.0, 23250.0));
+    frame.data[0] = (value >> 24) & 0xFF;
+    frame.data[1] = (value >> 16) & 0xFF;
+    frame.data[2] = (value >> 8)  & 0xFF;
+    frame.data[3] = value        & 0xFF;
+
+    return frame;
+}
+
+can_frame vesc_nexus::createSetBrakeFrame(uint8_t can_id, double brake) {
+    can_frame frame;
+    frame.can_id = (can_id) | (CAN_PACKET_SET_CURRENT_BRAKE << 8);
+    frame.can_id |= CAN_EFF_FLAG;
+    frame.can_dlc = 4;
+    int index = 0;
+    int32_t value = static_cast<int32_t>(std::clamp(brake, -20000.0, 200000.0) * 1000.0);
+    buffer_append_int32(frame.data, value, index);
+    return frame;
+}
+
+can_frame vesc_nexus::createSetPositionFrame(uint8_t can_id, double pos) {
+    can_frame frame;
+    frame.can_id = (can_id) | (CAN_PACKET_SET_POS << 8);
+    frame.can_id |= CAN_EFF_FLAG;
+    frame.can_dlc = 4;
+    int index = 0;
+    int32_t value = static_cast<int32_t>(std::clamp(pos, 0.0, 360.0) * 1000000.0);
+    buffer_append_int32(frame.data, value, index);
+    return frame;
+}
+
+// Парсинг CAN_PACKET_STATUS (ID 9)
+void vesc_nexus::parseStatusPacket(const can_frame& frame, vesc_msgs::msg::VescState& state) {
+    if (frame.can_dlc < 8) return;
+    int32_t erpm; int16_t current, duty;
+    std::memcpy(&erpm,   &frame.data[0], 4); erpm = __builtin_bswap32(erpm);
+    std::memcpy(&current, &frame.data[4], 2); current = __builtin_bswap16(current);
+    std::memcpy(&duty,    &frame.data[6], 2); duty = __builtin_bswap16(duty);
+
+    state.speed_rpm = static_cast<double>(erpm);
+    state.current_motor = static_cast<double>(current) / 10.0;
+    state.duty_cycle = static_cast<double>(duty) / 1000.0;
+}
+
+// CAN_PACKET_STATUS_4: Temp FET, Temp Motor, Current In, PID Pos
+void vesc_nexus::parseStatus4Packet(const can_frame& frame, vesc_msgs::msg::VescState& state) {
+    if (frame.can_dlc < 8) return;
+    int16_t temp_fet, temp_motor, current_in, pid_pos;
+    std::memcpy(&temp_fet,    &frame.data[0], 2); temp_fet = __builtin_bswap16(temp_fet);
+    std::memcpy(&temp_motor,  &frame.data[2], 2); temp_motor = __builtin_bswap16(temp_motor);
+    std::memcpy(&current_in,  &frame.data[4], 2); current_in = __builtin_bswap16(current_in);
+    std::memcpy(&pid_pos,     &frame.data[6], 2); pid_pos = __builtin_bswap16(pid_pos);
+
+    state.temp_controller = static_cast<double>(temp_fet) / 10.0;
+    state.temp_motor = static_cast<double>(temp_motor) / 10.0;
+    state.current_input = static_cast<double>(current_in) / 10.0;
+    state.pid_pos_now = static_cast<double>(pid_pos) / 50.0;
+}
+
+// CAN_PACKET_STATUS_5: Tachometer, Voltage In
+void vesc_nexus::parseStatus5Packet(const can_frame& frame, vesc_msgs::msg::VescState& state) {
+    if (frame.can_dlc < 6) return;
+    int32_t tachometer; int16_t voltage_in;
+    std::memcpy(&tachometer, &frame.data[0], 4); tachometer = __builtin_bswap32(tachometer);
+    std::memcpy(&voltage_in, &frame.data[4], 2); voltage_in = __builtin_bswap16(voltage_in);
+
+    state.tachometer = static_cast<uint32_t>(tachometer / 6);
+    state.voltage_input = static_cast<double>(voltage_in) / 10.0;
+}
+
+// CAN_PACKET_STATUS_2: Ah Used, Ah Charged
+void vesc_nexus::parseStatus2Packet(const can_frame& frame, vesc_msgs::msg::VescState& state) {
+    if (frame.can_dlc < 8) return;
+    int32_t ah_used, ah_charged;
+    std::memcpy(&ah_used,   &frame.data[0], 4); ah_used = __builtin_bswap32(ah_used);
+    std::memcpy(&ah_charged, &frame.data[4], 4); ah_charged = __builtin_bswap32(ah_charged);
+
+    state.charge_drawn = static_cast<double>(ah_used) / 10000.0;
+    state.charge_regen = static_cast<double>(ah_charged) / 10000.0;
+}
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\src\odometry_publisher.cpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\src\odometry_publisher.cpp
+# ----------------------------------------------------------------------------
+// src/odometry_publisher.cpp
+#include "vesc_nexus/odometry_publisher.hpp"
+#include <cmath>
+
+OdometryPublisher::OdometryPublisher(
+    const std::vector<VescHandler*>& vesc_handlers,
+    PublishOdomFunc publish_odom,
+    SendTfFunc send_tf,
+    NowFunc now,
+    double wheel_base, double wheel_radius)
+    : vesc_handlers_(vesc_handlers),
+      publish_odom_func_(std::move(publish_odom)),
+      send_tf_func_(std::move(send_tf)),
+      now_func_(std::move(now)),
+      wheel_base_(wheel_base),
+      wheel_radius_(wheel_radius)
+{
+    odom_msg_.header.frame_id = "odom";
+    odom_msg_.child_frame_id = "base_link";
+    transform_stamped_.header.frame_id = "odom";
+    transform_stamped_.child_frame_id = "base_link";
+}
+
+void OdometryPublisher::publish() {
+    if (last_publish_time_.nanoseconds() == 0) {
+        last_publish_time_ = now_func_();
+        return;  // Пропустим первую итерацию (dt = 0)
+    }
+    rclcpp::Time now = now_func_();
+    double dt = (now - last_publish_time_).seconds();
+    if (dt < 0.001) return;
+
+    double left_rpm = 0.0, right_rpm = 0.0;
+    int left_count = 0, right_count = 0;
+
+    for (auto* handler : vesc_handlers_) {
+        auto state = handler->getLastState();
+        std::string label = handler->getLabel();
+        if (label.find("left") != std::string::npos) {
+            left_rpm += state.speed_rpm;
+            ++left_count;
+        }
+        if (label.find("right") != std::string::npos) {
+            right_rpm += state.speed_rpm;
+            ++right_count;
+        }
+    }
+
+    if (left_count == 0 || right_count == 0) {
+        RCLCPP_WARN_ONCE(rclcpp::get_logger("OdometryPublisher"), "Not enough wheels for odometry");
+        return;
+    }
+
+    // Усреднение
+    left_rpm /= left_count;
+    right_rpm /= right_count;
+
+    // RPM → rad/s
+    double left_w = (left_rpm * 2.0 * M_PI) / 60.0;
+    double right_w = (right_rpm * 2.0 * M_PI) / 60.0;
+
+    // Линейная и угловая скорость
+    double vx = (right_w + left_w) * wheel_radius_ / 2.0;
+    double vtheta = (right_w - left_w) * wheel_radius_ / wheel_base_;
+
+    // Интегрируем
+    double delta_x = vx * cos(theta_) * dt;
+    double delta_y = vx * sin(theta_) * dt;
+    double delta_theta = vtheta * dt;
+
+    x_ += delta_x;
+    y_ += delta_y;
+    theta_ += delta_theta;
+
+    // Кватернион
+    tf2::Quaternion q;
+    q.setRPY(0, 0, theta_);
+
+    // Заполняем одометрию
+    odom_msg_.header.stamp = now;
+    odom_msg_.pose.pose.position.x = x_;
+    odom_msg_.pose.pose.position.y = y_;
+    odom_msg_.pose.pose.orientation.x = q.x();
+    odom_msg_.pose.pose.orientation.y = q.y();
+    odom_msg_.pose.pose.orientation.z = q.z();
+    odom_msg_.pose.pose.orientation.w = q.w();
+
+    odom_msg_.twist.twist.linear.x = vx;
+    odom_msg_.twist.twist.angular.z = vtheta;
+
+    // Публикуем
+    publish_odom_func_(odom_msg_);
+
+    // TF
+    transform_stamped_.header.stamp = now;
+    transform_stamped_.transform.translation.x = x_;
+    transform_stamped_.transform.translation.y = y_;
+    transform_stamped_.transform.rotation.x = q.x();
+    transform_stamped_.transform.rotation.y = q.y();
+    transform_stamped_.transform.rotation.z = q.z();
+    transform_stamped_.transform.rotation.w = q.w();
+
+    send_tf_func_(transform_stamped_);
+
+    last_publish_time_ = now;
+}
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\src\vesc_can_driver_node.cpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\src\vesc_can_driver_node.cpp
+# ----------------------------------------------------------------------------
+// vesc_can_driver_node.cpp
+#include "rclcpp/rclcpp.hpp"
+#include "vesc_nexus/can_interface.hpp"
+#include "vesc_nexus/vesc_handler.hpp"
+#include "vesc_nexus/odometry_publisher.hpp"
+#include "vesc_nexus/message_translator.hpp"
+#include <vesc_msgs/msg/vesc_state.hpp>
+#include <vesc_msgs/msg/vesc_state_stamped.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+#include <memory>
+#include <vector>
+
+using vesc_msgs::msg::VescState;
+using vesc_msgs::msg::VescStateStamped;
+class VescCanDriverNode : public rclcpp::Node {
+public:
+    VescCanDriverNode(const rclcpp::NodeOptions & options)
+            : rclcpp::Node("vesc_can_driver", options) {
+        RCLCPP_INFO(this->get_logger(), "Initializing VESC Nexus CAN Driver Node...");
+
+        this->declare_parameter("can_interface", "can0");
+        this->declare_parameter("vesc_ids", std::vector<int64_t>{1, 2, 3, 4});
+        this->declare_parameter("wheel_labels", std::vector<std::string>{"front_left", "front_right", "rear_left", "rear_right"});
+        this->declare_parameter("publish_rate", 100.0);
+        this->declare_parameter("wheel_radii", std::vector<double>{0.1, 0.1, 0.1, 0.1});
+        this->declare_parameter("wheel_poles", std::vector<int64_t>{30, 30, 30, 30});
+        this->declare_parameter("wheel_abs_min_erpm", std::vector<int64_t>{900, 900, 900, 900});
+        this->declare_parameter("wheel_base", 0.3);
+
+        std::string can_if;
+        this->get_parameter("can_interface", can_if);
+        std::vector<int64_t> vesc_ids;
+        this->get_parameter("vesc_ids", vesc_ids);
+        std::vector<std::string> labels;
+        this->get_parameter("wheel_labels", labels);
+        double publish_rate;
+        this->get_parameter("publish_rate", publish_rate);
+
+        std::vector<double> wheel_radii;
+        this->get_parameter("wheel_radii", wheel_radii);
+        std::vector<int64_t> wheel_poles;
+        this->get_parameter("wheel_poles", wheel_poles);
+        std::vector<int64_t> wheel_min_erpm;
+        this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
+
+        this->get_parameter("wheel_base", wheel_base_);
+
+        if (!(vesc_ids.size() == labels.size() &&
+            labels.size() == wheel_radii.size() &&
+            wheel_radii.size() == wheel_poles.size() &&
+            wheel_poles.size() == wheel_min_erpm.size())) {
+            RCLCPP_FATAL(this->get_logger(), "Mismatch in configuration array sizes!");
+            rclcpp::shutdown();
+            return;
+        }
+
+        // Инициализация CAN
+        can_interface_ = std::make_unique<CanInterface>(can_if);
+        can_interface_->setReceiveCallback([this](const auto& frame) {
+            this->handleCanFrame(frame);
+        });
+
+        if (!can_interface_->open()) {
+            RCLCPP_FATAL(this->get_logger(), "Failed to open CAN interface %s", can_if.c_str());
+            rclcpp::shutdown();
+            return;
+        }
+        RCLCPP_INFO(this->get_logger(), "CAN interface %s opened successfully.", can_if.c_str());
+
+        // Параметры
+        vesc_nexus::CommandLimits limits;
+        // ... загрузи limits ...
+
+        // Создание обработчиков
+        for (size_t i = 0; i < vesc_ids.size(); ++i) {
+            auto handler = std::make_shared<VescHandler>(
+                static_cast<uint8_t>(vesc_ids[i]),
+                labels[i],
+                wheel_radii[i],
+                static_cast<int>(wheel_poles[i]),
+                wheel_min_erpm[i],
+                limits
+            );
+
+            // Установка отправки CAN
+            handler->setSendCanFunc([this](const auto& f) {
+                return can_interface_->sendFrame(f);
+            });
+
+            // Установка callback на обновление состояния
+            handler->setStateUpdateCallback([this, label = labels[i]](const auto& state) {
+                auto msg = VescStateStamped();
+                msg.header.stamp = this->now();
+                msg.header.frame_id = label;
+                msg.state = state;
+
+                auto it = state_pubs_.find(label);
+                if (it != state_pubs_.end()) {
+                    it->second->publish(msg);
+                }
+            });
+
+            vesc_handlers_.push_back(handler);
+            vesc_ptrs_.push_back(handler.get());
+            RCLCPP_INFO(this->get_logger(), "VESC %d (%s) initialized", static_cast<int>(vesc_ids[i]), labels[i].c_str());
+        }
+
+        // Паблишеры для состояний
+        for (const auto& label : labels) {
+            state_pubs_[label] = this->create_publisher<VescStateStamped>(
+                "sensors/motor_state/" + label, 10);
+        }
+
+        // Одометрия
+        odom_publisher_ = std::make_unique<OdometryPublisher>(
+            vesc_ptrs_,
+            [this](const nav_msgs::msg::Odometry& msg) {
+                if (!odom_pub_) {
+                    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 50);
+                }
+                odom_pub_->publish(msg);
+            },
+            [this](const geometry_msgs::msg::TransformStamped& tf) {
+                if (!tf_broadcaster_) {
+                    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
+                }
+                tf_broadcaster_->sendTransform(tf);
+            },
+            [this]() { return this->now(); },
+            wheel_base_,  // wheel_base
+            0.1   // wheel_radius
+        );
+        RCLCPP_INFO(this->get_logger(), "Odometry publisher initialized.");
+
+        // Таймер
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(static_cast<int>(1000.0 / publish_rate)),
+            [this]() {
+                // 1. Публикуем одометрию
+                odom_publisher_->publish();
+                // 3. Отправляем последнюю команду (если актуальна)
+                if (last_command_.valid) {
+                    auto now = this->now();
+                    auto dt = (now - last_command_.stamp).seconds();
+
+                    // Если команда старше 0.5 сек — обнуляем (остановка)
+                    if (dt > 0.1) {
+                        last_command_.valid = false;
+                        sendSpeedToWheels(0.0, 0.0);  // стоп
+                    } else {
+                        sendSpeedToWheels(last_command_.left_mps, last_command_.right_mps);
+                    }
+                } else {
+                    //sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
+                }
+            }
+        );
+
+        // Подписка на cmd_vel
+        cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+            "cmd_vel", 10,
+            [this](const geometry_msgs::msg::Twist::SharedPtr msg) {
+                this->onCmdVel(msg);
+            }
+        );
+
+        RCLCPP_INFO(this->get_logger(), "✅ VESC Nexus Driver is READY and RUNNING.");
+    }
+
+private:
+    // В private: секции узла
+    struct WheelSpeedCommand {
+        double left_mps = 0.0;
+        double right_mps = 0.0;
+        rclcpp::Time stamp;
+        bool valid = false;
+    } last_command_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    double wheel_base_;
+    void handleCanFrame(const can_frame& frame) {
+        uint8_t sender_id = frame.can_id & 0xFF;
+        for (auto& handler : vesc_handlers_) {
+            if (handler->getCanId() == sender_id) {
+                handler->processCanFrame(frame);
+                break;
+            }
+        }
+    }
+    void sendSpeedToWheels(double left_mps, double right_mps) {
+        for (auto& handler : vesc_handlers_) {
+            std::string label = handler->getLabel();
+            if (label.find("left") != std::string::npos) {
+                handler->sendSpeed(left_mps);
+            } else if (label.find("right") != std::string::npos) {
+                handler->sendSpeed(right_mps);
+            }
+        }
+    }
+
+    void onCmdVel(const geometry_msgs::msg::Twist::SharedPtr msg) {
+        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%.2f|y=%.2f|z=%.2f, angular.x=%.2f|y=%.2f|z=%.2f",
+                    msg->linear.x,msg->linear.y,msg->linear.z,msg->angular.x,msg->angular.y, msg->angular.z);
+
+        double linear = msg->linear.x;
+        double angular = msg->angular.z;
+
+        double left_mps = linear - angular * wheel_base_ / 2.0;
+        double right_mps = linear + angular * wheel_base_ / 2.0;
+
+        RCLCPP_INFO(this->get_logger(), "Left: %.2f MPS, Right: %.2f MPS", left_mps, right_mps);
+
+        // Сохраняем команду
+        last_command_.left_mps = left_mps;
+        last_command_.right_mps = right_mps;
+        last_command_.stamp = this->now();
+        last_command_.valid = true;
+    }
+
+    std::unique_ptr<CanInterface> can_interface_;
+    std::vector<std::shared_ptr<VescHandler>> vesc_handlers_;
+    std::vector<VescHandler*> vesc_ptrs_;
+    std::unique_ptr<OdometryPublisher> odom_publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+
+    std::map<std::string, rclcpp::Publisher<VescStateStamped>::SharedPtr> state_pubs_;
+};
+
+
+#include "rclcpp_components/register_node_macro.hpp"  // NOLINT
+
+RCLCPP_COMPONENTS_REGISTER_NODE(VescCanDriverNode)
+
+# ----------------------------------------------------------------------------
+# Файл: src\vesc_nexus\src\vesc_handler.cpp
+# Путь: D:\PROJECTS\vesc_nexus\src\vesc_nexus\src\vesc_handler.cpp
+# ----------------------------------------------------------------------------
+// vesc_handler.cpp
+#include "vesc_nexus/vesc_handler.hpp"
+#include "vesc_nexus/message_translator.hpp"
+#include <rclcpp/logging.hpp>
+
+VescHandler::VescHandler(uint8_t can_id, const std::string& label,
+                         double wheel_radius, int poles, int64_t min_erpm,
+                         const vesc_nexus::CommandLimits& limits)
+    : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
+     pole_pairs_(poles / 2), min_erpm_(min_erpm)
+{
+    last_state_.label = label;
+    last_state_.alive = false;
+}
+
+void VescHandler::setSendCanFunc(SendCanFrameFunc func) {
+    send_can_func_ = func;
+}
+
+void VescHandler::setStateUpdateCallback(StateUpdateCallback cb) {
+    state_update_cb_ = cb;
+}
+
+// vesc_handler.cpp
+void VescHandler::processCanFrame(const struct can_frame& frame) {
+    uint8_t sender_id = frame.can_id & 0xFF;
+    uint8_t command_id = (frame.can_id >> 8) & 0xFF;
+
+    if (!frame.can_id & CAN_EFF_FLAG) return;  // Только 29-bit
+    if (sender_id != can_id_) return;
+
+    switch (command_id) {
+        case vesc_nexus::CAN_PACKET_STATUS:
+            vesc_nexus::parseStatusPacket(frame, last_state_);
+            break;
+        case vesc_nexus::CAN_PACKET_STATUS_2:
+            vesc_nexus::parseStatus2Packet(frame, last_state_);
+            break;
+        case vesc_nexus::CAN_PACKET_STATUS_4:
+            vesc_nexus::parseStatus4Packet(frame, last_state_);
+            break;
+        case vesc_nexus::CAN_PACKET_STATUS_5:
+            vesc_nexus::parseStatus5Packet(frame, last_state_);
+            break;
+        default:
+            return;
+    }
+
+    last_state_.alive = true;
+    if (state_update_cb_) {
+        state_update_cb_(last_state_);
+    }
+}
+
+// Удали метод requestState() или оставь пустым
+void VescHandler::requestState() {
+    // Ничего не делаем — VESC сам шлёт статус
+}
+
+void VescHandler::sendDutyCycle(double duty) {
+    if (send_can_func_) {
+        auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty);
+        send_can_func_(frame);
+    }
+}
+
+void VescHandler::sendCurrent(double current) {
+    if (send_can_func_) {
+        auto frame = vesc_nexus::createSetCurrentFrame(can_id_, current);
+        send_can_func_(frame);
+    }
+}
+
+void VescHandler::sendSpeed(double linear_speed) {
+    if (!send_can_func_) return;
+
+    // Конвертируем линейную скорость в ERPM
+    double circumference = 2.0 * M_PI * wheel_radius_;
+    double rps = linear_speed / circumference;
+    double rpm = rps * 60.0;
+    double erpm = rpm * pole_pairs_;
+
+    // Ограничиваем по минимальному ERPM (чтобы преодолеть статическое трение)
+    if (std::abs(erpm) > 0 && std::abs(erpm) < min_erpm_) {
+        erpm = (erpm > 0) ? min_erpm_ : -min_erpm_;
+    }
+
+    // Отправляем ERPM
+    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm);
+    send_can_func_(frame);
+}
+
+void VescHandler::sendBrake(double brake) {
+    if (send_can_func_) {
+        auto frame = vesc_nexus::createSetBrakeFrame(can_id_, brake);
+        send_can_func_(frame);
+    }
+}
+
+void VescHandler::sendPosition(double pos) {
+    if (send_can_func_) {
+        auto frame = vesc_nexus::createSetPositionFrame(can_id_, pos);
+        send_can_func_(frame);
+    }
+}
+
+uint8_t VescHandler::getCanId() const {
+    return can_id_;
+}
+
+std::string VescHandler::getLabel() const {
+    return label_;
+}
+
+vesc_msgs::msg::VescState VescHandler::getLastState() const {
+    return last_state_;
+}
+
+# ================================================================================
+# Экспорт завершён. Включено файлов: 23
