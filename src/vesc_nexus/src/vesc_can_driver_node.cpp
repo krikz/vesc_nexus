@@ -121,19 +121,13 @@ public:
             [this]() {
                 // 1. Публикуем одометрию
                 odom_publisher_->publish();
-
-                // 2. Опрашиваем состояние VESC
-                for (auto& handler : vesc_handlers_) {
-                    handler->requestState();
-                }
-
                 // 3. Отправляем последнюю команду (если актуальна)
                 if (last_command_.valid) {
                     auto now = this->now();
                     auto dt = (now - last_command_.stamp).seconds();
 
                     // Если команда старше 0.5 сек — обнуляем (остановка)
-                    if (dt > 0.5) {
+                    if (dt > 1) {
                         last_command_.valid = false;
                         sendSpeedToWheels(0.0, 0.0);  // стоп
                     } else {
