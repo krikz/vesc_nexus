@@ -36,6 +36,9 @@ rclcpp_components_register_node(${PROJECT_NAME}
 )
 
 # Новая shared-библиотека для hardware_interface
+find_package(hardware_interface REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 add_library(vesc_hardware_interface SHARED
   src/vesc_system_hardware_interface.cpp
 )
