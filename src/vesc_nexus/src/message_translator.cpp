@@ -17,12 +17,15 @@ void vesc_nexus::buffer_append_int16(uint8_t* buffer, int16_t number, int& index
 
 can_frame vesc_nexus::createSetDutyCycleFrame(uint8_t can_id, double duty) {
     can_frame frame;
-    frame.can_id = (can_id) | (CAN_PACKET_SET_DUTY << 8);
-    frame.can_id |= CAN_EFF_FLAG;  // 29-bit extended ID
+    frame.can_id = ((CAN_PACKET_SET_DUTY << 8) | can_id) | CAN_EFF_FLAG;
     frame.can_dlc = 4;
-    int index = 0;
+
     int32_t value = static_cast<int32_t>(std::clamp(duty, -1.0, 1.0) * 100000.0);
-    buffer_append_int32(frame.data, value, index);
+    frame.data[0] = (value >> 24) & 0xFF;
+    frame.data[1] = (value >> 16) & 0xFF;
+    frame.data[2] = (value >> 8)  & 0xFF;
+    frame.data[3] = value        & 0xFF;
+
     return frame;
 }
 
@@ -37,14 +40,20 @@ can_frame vesc_nexus::createSetCurrentFrame(uint8_t can_id, double current) {
     return frame;
 }
 
+// message_translator.cpp
 can_frame vesc_nexus::createSetSpeedFrame(uint8_t can_id, double rpm) {
     can_frame frame;
-    frame.can_id = (can_id) | (CAN_PACKET_SET_RPM << 8);
-    frame.can_id |= CAN_EFF_FLAG;
-    frame.can_dlc = 4;
-    int index = 0;
+    // Правильный 29-битный ID: (CAN_PACKET_SET_RPM << 8) | can_id
+    frame.can_id = ((CAN_PACKET_SET_RPM << 8) | can_id) | CAN_EFF_FLAG;
+    frame.can_dlc = 4;  // Только 4 байта данных!
+
     int32_t value = static_cast<int32_t>(std::clamp(rpm, -23250.0, 23250.0));
-    buffer_append_int32(frame.data, value, index);
+    // Big-endian запись
+    frame.data[0] = (value >> 24) & 0xFF;
+    frame.data[1] = (value >> 16) & 0xFF;
+    frame.data[2] = (value >> 8)  & 0xFF;
+    frame.data[3] = value        & 0xFF;
+
     return frame;
 }
 
