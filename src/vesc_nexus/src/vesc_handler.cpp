@@ -4,8 +4,10 @@
 #include <rclcpp/logging.hpp>
 
 VescHandler::VescHandler(uint8_t can_id, const std::string& label,
-                         const vesc_nexus::CommandLimits& limits)
-    : can_id_(can_id), label_(label), limits_(limits)
+                         double wheel_radius, int poles, double min_erpm,
+                         const CommandLimits& limits)
+    : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
+     pole_pairs_(poles / 2), min_erpm_(min_erpm)
 {
     last_state_.label = label;
     last_state_.alive = false;
@@ -69,11 +71,23 @@ void VescHandler::sendCurrent(double current) {
     }
 }
 
-void VescHandler::sendSpeed(double rpm) {
-    if (send_can_func_) {
-        auto frame = vesc_nexus::createSetSpeedFrame(can_id_, rpm);
-        send_can_func_(frame);
+void VescHandler::sendSpeed(double linear_speed) {
+    if (!send_can_func_) return;
+
+    // Конвертируем линейную скорость в ERPM
+    double circumference = 2.0 * M_PI * wheel_radius_;
+    double rps = linear_speed / circumference;
+    double rpm = rps * 60.0;
+    double erpm = rpm * pole_pairs_;
+
+    // Ограничиваем по минимальному ERPM (чтобы преодолеть статическое трение)
+    if (std::abs(erpm) > 0 && std::abs(erpm) < min_erpm_) {
+        erpm = (erpm > 0) ? min_erpm_ : -min_erpm_;
     }
+
+    // Отправляем ERPM
+    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm, limits_);
+    send_can_func_(frame);
 }
 
 void VescHandler::sendBrake(double brake) {
