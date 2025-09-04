@@ -27,6 +27,7 @@ public:
         this->declare_parameter("wheel_radii", std::vector<double>{0.1, 0.1, 0.1, 0.1});
         this->declare_parameter("wheel_poles", std::vector<int64_t>{30, 30, 30, 30});
         this->declare_parameter("wheel_abs_min_erpm", std::vector<int64_t>{900, 900, 900, 900});
+        this->declare_parameter("wheel_base", 0.3);
 
         std::string can_if;
         this->get_parameter("can_interface", can_if);
@@ -44,6 +45,7 @@ public:
         std::vector<int64_t> wheel_min_erpm;
         this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
 
+        this->get_parameter("wheel_base", wheel_base_);
 
         if (!(vesc_ids.size() == labels.size() &&
             labels.size() == wheel_radii.size() &&
@@ -127,7 +129,7 @@ public:
                 tf_broadcaster_->sendTransform(tf);
             },
             [this]() { return this->now(); },
-            0.5,  // wheel_base
+            wheel_base_,  // wheel_base
             0.1   // wheel_radius
         );
         RCLCPP_INFO(this->get_logger(), "Odometry publisher initialized.");
@@ -177,6 +179,7 @@ private:
     } last_command_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    double wheel_base_;
     void handleCanFrame(const can_frame& frame) {
         uint8_t sender_id = frame.can_id & 0xFF;
         for (auto& handler : vesc_handlers_) {
@@ -203,10 +206,9 @@ private:
 
         double linear = msg->linear.x;
         double angular = msg->angular.z;
-        double wheel_base = this->get_parameter("wheel_base").as_double();
 
-        double left_mps = linear - angular * wheel_base / 2.0;
-        double right_mps = linear + angular * wheel_base / 2.0;
+        double left_mps = linear - angular * wheel_base_ / 2.0;
+        double right_mps = linear + angular * wheel_base_ / 2.0;
 
         RCLCPP_INFO(this->get_logger(), "Left: %.2f MPS, Right: %.2f MPS", left_mps, right_mps);
 
