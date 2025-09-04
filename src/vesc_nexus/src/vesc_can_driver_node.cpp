@@ -26,7 +26,7 @@ public:
         this->declare_parameter("publish_rate", 100.0);
         this->declare_parameter("wheel_radii", std::vector<double>{0.1, 0.1, 0.1, 0.1});
         this->declare_parameter("wheel_poles", std::vector<int64_t>{30, 30, 30, 30});
-        this->declare_parameter("wheel_abs_min_erpm", std::vector<double>{900, 900, 900, 900});
+        this->declare_parameter("wheel_abs_min_erpm", std::vector<int64_t>{900, 900, 900, 900});
 
         std::string can_if;
         this->get_parameter("can_interface", can_if);
