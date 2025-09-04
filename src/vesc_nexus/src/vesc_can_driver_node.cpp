@@ -25,7 +25,7 @@ public:
         this->declare_parameter("wheel_labels", std::vector<std::string>{"front_left", "front_right", "rear_left", "rear_right"});
         this->declare_parameter("publish_rate", 100.0);
         this->declare_parameter("wheel_radii", std::vector<double>{0.1, 0.1, 0.1, 0.1});
-        this->declare_parameter("wheel_poles", std::vector<int>{30, 30, 30, 30});
+        this->declare_parameter("wheel_poles", std::vector<int64_t>{30, 30, 30, 30});
         this->declare_parameter("wheel_abs_min_erpm", std::vector<double>{900, 900, 900, 900});
 
         std::string can_if;
@@ -39,9 +39,9 @@ public:
 
         std::vector<double> wheel_radii;
         this->get_parameter("wheel_radii", wheel_radii);
-        std::vector<int> wheel_poles;
+        std::vector<int64_t> wheel_poles;
         this->get_parameter("wheel_poles", wheel_poles);
-        std::vector<double> wheel_min_erpm;
+        std::vector<int64_t> wheel_min_erpm;
         this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
 
 
@@ -77,7 +77,7 @@ public:
                 static_cast<uint8_t>(vesc_ids[i]),
                 labels[i],
                 wheel_radii[i],
-                wheel_poles[i],
+                static_cast<int>(wheel_poles[i]),
                 wheel_min_erpm[i],
                 limits
             );

@@ -13,7 +13,7 @@ public:
     using StateUpdateCallback = std::function<void(const vesc_msgs::msg::VescState&)>;
 
     VescHandler(uint8_t can_id, const std::string& label,
-                double wheel_radius, int poles, double min_erpm,
+                double wheel_radius, int poles, int64_t min_erpm,
                 const vesc_nexus::CommandLimits& limits);
 
     void setSendCanFunc(SendCanFrameFunc func);
@@ -42,5 +42,5 @@ private:
     
     double wheel_radius_;     // радиус колеса
     int pole_pairs_;          // количество пар полюсов (poles / 2)
-    double min_erpm_;         // минимальный ERPM для движения
+    int64_t min_erpm_;         // минимальный ERPM для движения
 };

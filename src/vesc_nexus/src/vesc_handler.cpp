@@ -4,7 +4,7 @@
 #include <rclcpp/logging.hpp>
 
 VescHandler::VescHandler(uint8_t can_id, const std::string& label,
-                         double wheel_radius, int poles, double min_erpm,
+                         double wheel_radius, int poles, int64_t min_erpm,
                          const vesc_nexus::CommandLimits& limits)
     : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
      pole_pairs_(poles / 2), min_erpm_(min_erpm)
