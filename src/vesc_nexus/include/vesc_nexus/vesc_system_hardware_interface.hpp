@@ -39,6 +39,7 @@ private:
   std::vector<double> hw_velocities_;
   std::vector<double> hw_efforts_;
   std::vector<double> cmd_velocities_;
+  const hardware_interface::HardwareInfo * info_ = nullptr;
 
   std::string can_interface_name_;
   double publish_rate_ = 50.0;

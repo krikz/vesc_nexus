@@ -12,6 +12,8 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   if (hardware_interface::SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS) {
     return hardware_interface::CallbackReturn::ERROR;
   }
+  
+  info_ = &info;
 
   can_interface_name_ = info.hardware_parameters.at("can_interface");
   publish_rate_ = std::stod(info.hardware_parameters.at("publish_rate"));
@@ -104,9 +106,10 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_error(
 std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::export_state_interfaces() {
   std::vector<hardware_interface::StateInterface> state_interfaces;
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
-    state_interfaces.emplace_back("position", &hw_positions_[i]);
-    state_interfaces.emplace_back("velocity", &hw_velocities_[i]);
-    state_interfaces.emplace_back("effort", &hw_efforts_[i]);
+    const auto & joint = info_->joints[i];  // info_ нужно сохранить в on_init
+    state_interfaces.emplace_back(joint.name, "position", &hw_positions_[i]);
+    state_interfaces.emplace_back(joint.name, "velocity", &hw_velocities_[i]);
+    state_interfaces.emplace_back(joint.name, "effort", &hw_efforts_[i]);
   }
   return state_interfaces;
 }
@@ -114,7 +117,8 @@ std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::exp
 std::vector<hardware_interface::CommandInterface> VescSystemHardwareInterface::export_command_interfaces() {
   std::vector<hardware_interface::CommandInterface> command_interfaces;
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
-    command_interfaces.emplace_back("velocity", &cmd_velocities_[i]);
+    const auto & joint = info_->joints[i];
+    command_interfaces.emplace_back(joint.name, "velocity", &cmd_velocities_[i]);
   }
   return command_interfaces;
 }
