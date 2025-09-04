@@ -1,4 +1,4 @@
-<library path="lib/libvesc_hardware_interface">
+<library path="libvesc_hardware_interface">
   <class name="vesc_nexus/VescSystemHardwareInterface"
          type="vesc_nexus::VescSystemHardwareInterface"
          base_class_type="hardware_interface::SystemInterface">
