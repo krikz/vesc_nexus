@@ -146,7 +146,7 @@ public:
                     auto dt = (now - last_command_.stamp).seconds();
 
                     // Если команда старше 0.5 сек — обнуляем (остановка)
-                    if (dt > 1) {
+                    if (dt > 0.1) {
                         last_command_.valid = false;
                         sendSpeedToWheels(0.0, 0.0);  // стоп
                     } else {
@@ -201,8 +201,8 @@ private:
     }
 
     void onCmdVel(const geometry_msgs::msg::Twist::SharedPtr msg) {
-        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%.2f, angular.z=%.2f",
-                    msg->linear.x, msg->angular.z);
+        RCLCPP_INFO(this->get_logger(), "Received cmd_vel: linear.x=%.2f|y=%.2f|z=%.2f, angular.x=%.2f|y=%.2f|z=%.2f",
+                    msg->linear.x,msg->linear.y,msg->linear.z,msg->angular.x,msg->angular.y, msg->angular.z);
 
         double linear = msg->linear.x;
         double angular = msg->angular.z;
