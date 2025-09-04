@@ -86,7 +86,7 @@ void VescHandler::sendSpeed(double linear_speed) {
     }
 
     // Отправляем ERPM
-    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm, limits_);
+    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm);
     send_can_func_(frame);
 }
 
