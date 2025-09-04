@@ -1,5 +1,6 @@
-controller_manager:
+/**:
   ros__parameters:
+    type: "diff_drive_controller/DiffDriveController"
     update_rate: 50  # Hz
     # Список контроллеров (опционально)
     controller_names:
