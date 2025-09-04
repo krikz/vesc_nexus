@@ -72,8 +72,22 @@ install(TARGETS vesc_hardware_interface
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_gmock REQUIRED)
+  find_package(hardware_interface REQUIRED)
+
   ament_lint_auto_find_test_dependencies()
+
+  # Пример теста (опционально, но рекомендуется)
+  ament_add_gmock(test_load_vesc_hardware
+    test/test_load_vesc_hardware.cpp
+  )
+  target_link_libraries(test_load_vesc_hardware
+    ${PROJECT_NAME}
+    hardware_interface::hardware_interface
+  )
 endif()
+
+ament_export_libraries(vesc_hardware_interface)
 
 ament_auto_package(
   INSTALL_TO_SHARE
