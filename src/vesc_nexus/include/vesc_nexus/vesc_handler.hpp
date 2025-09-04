@@ -14,7 +14,7 @@ public:
 
     VescHandler(uint8_t can_id, const std::string& label,
                 double wheel_radius, int poles, double min_erpm,
-                const CommandLimits& limits = CommandLimits());
+                const vesc_nexus::CommandLimits& limits);
 
     void setSendCanFunc(SendCanFrameFunc func);
     void setStateUpdateCallback(StateUpdateCallback cb);
