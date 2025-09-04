@@ -199,8 +199,8 @@ private:
         double left_mps = linear - angular * wheel_base / 2.0;
         double right_mps = linear + angular * wheel_base / 2.0;
 
-        double left_rpm = mps_to_rpm(left_mps) * 15;
-        double right_rpm = mps_to_rpm(right_mps) * 15;
+        double left_rpm = mps_to_rpm(left_mps) * 30;
+        double right_rpm = mps_to_rpm(right_mps) * 30;
 
         RCLCPP_INFO(this->get_logger(), "Left: %.2f RPM, Right: %.2f RPM", left_rpm, right_rpm);
 
