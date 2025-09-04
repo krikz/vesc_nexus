@@ -133,7 +133,7 @@ public:
                     auto dt = (now - last_command_.stamp).seconds();
 
                     // Если команда старше 0.5 сек — обнуляем (остановка)
-                    if (dt > 0.5) {
+                    if (dt > 1) {
                         last_command_.valid = false;
                         sendSpeedToWheels(0.0, 0.0);  // стоп
                     } else {
