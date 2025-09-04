@@ -45,9 +45,7 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
         default:
             return;
     }
-    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                    "processCanFrame sender_id %d, command_id %d",
-                    sender_id, command_id);
+
     last_state_.alive = true;
     if (state_update_cb_) {
         state_update_cb_(last_state_);
