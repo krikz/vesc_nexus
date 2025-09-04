@@ -39,22 +39,28 @@ rclcpp_components_register_node(${PROJECT_NAME}
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+
 add_library(vesc_hardware_interface SHARED
   src/vesc_system_hardware_interface.cpp
 )
+
+# Только основная библиотека проекта
 target_link_libraries(vesc_hardware_interface
   ${PROJECT_NAME}
-  hardware_interface::hardware_interface
 )
-target_include_directories(vesc_hardware_interface PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
+
+# Указываем зависимости через ament
 ament_target_dependencies(vesc_hardware_interface
   rclcpp
   rclcpp_lifecycle
   hardware_interface
   pluginlib
+)
+
+# Include директории
+target_include_directories(vesc_hardware_interface PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
 # Экспорт pluginlib
