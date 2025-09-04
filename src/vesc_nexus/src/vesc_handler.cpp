@@ -19,25 +19,40 @@ void VescHandler::setStateUpdateCallback(StateUpdateCallback cb) {
     state_update_cb_ = cb;
 }
 
+// vesc_handler.cpp
 void VescHandler::processCanFrame(const struct can_frame& frame) {
-    if ((frame.can_id & 0xFF) != can_id_) return;
+    uint8_t sender_id = frame.can_id & 0xFF;
+    uint8_t command_id = (frame.can_id >> 8) & 0xFF;
 
-    if (frame.data[0] == 4) {  // COMM_GET_VALUES
-        vesc_nexus::parseValuesReply(frame, last_state_);
-        last_state_.label = label_;
-        last_state_.alive = true;
+    if (!frame.can_id & CAN_EFF_FLAG) return;  // Только 29-bit
+    if (sender_id != can_id_) return;
 
-        if (state_update_cb_) {
-            state_update_cb_(last_state_);
-        }
+    switch (command_id) {
+        case vesc_nexus::CAN_PACKET_STATUS:
+            vesc_nexus::parseStatusPacket(frame, last_state_);
+            break;
+        case vesc_nexus::CAN_PACKET_STATUS_2:
+            vesc_nexus::parseStatus2Packet(frame, last_state_);
+            break;
+        case vesc_nexus::CAN_PACKET_STATUS_4:
+            vesc_nexus::parseStatus4Packet(frame, last_state_);
+            break;
+        case vesc_nexus::CAN_PACKET_STATUS_5:
+            vesc_nexus::parseStatus5Packet(frame, last_state_);
+            break;
+        default:
+            return;
+    }
+
+    last_state_.alive = true;
+    if (state_update_cb_) {
+        state_update_cb_(last_state_);
     }
 }
 
+// Удали метод requestState() или оставь пустым
 void VescHandler::requestState() {
-    if (send_can_func_) {
-        //auto frame = vesc_nexus::createRequestValuesFrame(can_id_);
-        //send_can_func_(frame);
-    }
+    // Ничего не делаем — VESC сам шлёт статус
 }
 
 void VescHandler::sendDutyCycle(double duty) {

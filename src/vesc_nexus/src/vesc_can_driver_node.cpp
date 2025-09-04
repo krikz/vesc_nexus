@@ -121,12 +121,6 @@ public:
             [this]() {
                 // 1. Публикуем одометрию
                 odom_publisher_->publish();
-
-                // 2. Опрашиваем состояние VESC
-                for (auto& handler : vesc_handlers_) {
-                    handler->requestState();
-                }
-
                 // 3. Отправляем последнюю команду (если актуальна)
                 if (last_command_.valid) {
                     auto now = this->now();
