@@ -1,18 +1,52 @@
 controller_manager:
   ros__parameters:
-    update_rate: 50
+    update_rate: 50  # Hz
+    # Список контроллеров (опционально)
+    controller_names:
+      - diff_drive_controller
 
 diff_drive_controller:
   ros__parameters:
     type: "diff_drive_controller/DiffDriveController"
-    left_wheel_names: ["front_left_wheel", "rear_left_wheel"]
-    right_wheel_names: ["front_right_wheel", "rear_right_wheel"]
+
+    # Левые колёса
+    left_wheel_names:
+      - front_left_wheel
+      - rear_left_wheel
+
+    # Правые колёса
+    right_wheel_names:
+      - front_right_wheel
+      - rear_right_wheel
+
+    # Расстояние между левыми и правыми колёсами
     wheel_separation: 0.3
+
+    # Радиус колеса
     wheel_radius: 0.115
+
+    # Количество колёс с каждой стороны
     wheels_per_side: 2
+
+    # Частота публикации
     publish_rate: 50.0
+
+    # Таймаут команды
+    cmd_vel_timeout: 0.5
+
+    # Не использовать stamped Twist
+    use_stamped_vel: false
+
+    # TF
     enable_odom_tf: true
     odom_frame_id: odom
     base_frame_id: base_link
-    cmd_vel_timeout: 0.5
-    use_stamped_vel: false
+
+    # Лимиты (опционально)
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 2.0
+    linear.x.min_velocity: -2.0
+
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 3.0
+    angular.z.min_velocity: -3.0
