@@ -11,10 +11,12 @@ def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            package='controller_manager',
-            executable='ros2_control_node',
-            parameters=[controller_config, {'robot_description': Command(['xacro ', urdf_path])}]
-        ),
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
+            output='screen',
+            parameters=[controller_config,{'robot_description': urdf_path}],
+            arguments=[urdf_path]),
         Node(
             package='controller_manager',
             executable='spawner',
