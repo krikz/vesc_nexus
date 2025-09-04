@@ -57,35 +57,35 @@ void VescHandler::requestState() {
 
 void VescHandler::sendDutyCycle(double duty) {
     if (send_can_func_) {
-        auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty, limits_);
+        auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty);
         send_can_func_(frame);
     }
 }
 
 void VescHandler::sendCurrent(double current) {
     if (send_can_func_) {
-        auto frame = vesc_nexus::createSetCurrentFrame(can_id_, current, limits_);
+        auto frame = vesc_nexus::createSetCurrentFrame(can_id_, current);
         send_can_func_(frame);
     }
 }
 
 void VescHandler::sendSpeed(double rpm) {
     if (send_can_func_) {
-        auto frame = vesc_nexus::createSetSpeedFrame(can_id_, rpm, limits_);
+        auto frame = vesc_nexus::createSetSpeedFrame(can_id_, rpm);
         send_can_func_(frame);
     }
 }
 
 void VescHandler::sendBrake(double brake) {
     if (send_can_func_) {
-        auto frame = vesc_nexus::createSetBrakeFrame(can_id_, brake, limits_);
+        auto frame = vesc_nexus::createSetBrakeFrame(can_id_, brake);
         send_can_func_(frame);
     }
 }
 
 void VescHandler::sendPosition(double pos) {
     if (send_can_func_) {
-        auto frame = vesc_nexus::createSetPositionFrame(can_id_, pos, limits_);
+        auto frame = vesc_nexus::createSetPositionFrame(can_id_, pos);
         send_can_func_(frame);
     }
 }
