@@ -1,12 +1,10 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import Command, FileContent, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.descriptions import ParameterValue
-from launch.substitutions import Command
+from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 import os
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare, FileContent
 
 def generate_launch_description():
     urdf = FileContent(PathJoinSubstitution([FindPackageShare('vesc_nexus', 'robot.urdf.xacro')]))
