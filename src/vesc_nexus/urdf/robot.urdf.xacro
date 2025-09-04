@@ -1,7 +1,7 @@
-<robot name="quad_diff_robot">
+<robot name="quad_robot">
   <ros2_control name="VescSystem" type="system">
     <hardware>
-      <plugin>vesc_nexus/VescHardwareInterface</plugin>
+      <plugin>vesc_nexus/VescSystemHardwareInterface</plugin>
       <param name="can_interface">can0</param>
       <param name="publish_rate">50.0</param>
       <param name="wheel_radius">0.115</param>
@@ -14,6 +14,7 @@
       <param name="can_id">49</param>
       <param name="poles">30</param>
       <param name="min_erpm">900</param>
+      <param name="wheel_radius">0.115</param>
     </joint>
 
     <joint name="front_right_wheel" type="continuous">
@@ -23,6 +24,7 @@
       <param name="can_id">124</param>
       <param name="poles">30</param>
       <param name="min_erpm">900</param>
+      <param name="wheel_radius">0.115</param>
     </joint>
 
     <joint name="rear_left_wheel" type="continuous">
@@ -32,6 +34,7 @@
       <param name="can_id">81</param>
       <param name="poles">30</param>
       <param name="min_erpm">900</param>
+      <param name="wheel_radius">0.115</param>
     </joint>
 
     <joint name="rear_right_wheel" type="continuous">
@@ -41,6 +44,7 @@
       <param name="can_id">94</param>
       <param name="poles">30</param>
       <param name="min_erpm">900</param>
+      <param name="wheel_radius">0.115</param>
     </joint>
   </ros2_control>
 </robot>
