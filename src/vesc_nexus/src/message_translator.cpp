@@ -95,7 +95,7 @@ void vesc_nexus::parseStatus4Packet(const can_frame& frame, vesc_msgs::msg::Vesc
     state.temp_controller = static_cast<double>(temp_fet) / 10.0;
     state.temp_motor = static_cast<double>(temp_motor) / 10.0;
     state.current_input = static_cast<double>(current_in) / 10.0;
-    state.position = static_cast<double>(pid_pos) / 50.0;
+    state.pid_pos_now = static_cast<double>(pid_pos) / 50.0;
 }
 
 // CAN_PACKET_STATUS_5: Tachometer, Voltage In
