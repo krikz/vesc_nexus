@@ -19,6 +19,6 @@ def generate_launch_description():
             package='controller_manager',
             executable='spawner',
             parameters=[controller_config],
-            arguments=['diff_drive_controller']
+            arguments=["diff_drive_controller", "-c", "/controller_manager", "-t", "diff_drive_controller/DiffDriveController"],
         ),
     ])
