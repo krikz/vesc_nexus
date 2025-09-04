@@ -25,9 +25,7 @@ void VescHandler::setStateUpdateCallback(StateUpdateCallback cb) {
 void VescHandler::processCanFrame(const struct can_frame& frame) {
     uint8_t sender_id = frame.can_id & 0xFF;
     uint8_t command_id = (frame.can_id >> 8) & 0xFF;
-    RCLCPP_ERROR(rclcpp::get_logger("VescHandler"),
-                    "processCanFrame sender_id %d, command_id %d",
-                    sender_id, command_id);
+
     if (!frame.can_id & CAN_EFF_FLAG) return;  // Только 29-bit
     if (sender_id != can_id_) return;
 
@@ -47,7 +45,9 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
         default:
             return;
     }
-
+    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                    "processCanFrame sender_id %d, command_id %d",
+                    sender_id, command_id);
     last_state_.alive = true;
     if (state_update_cb_) {
         state_update_cb_(last_state_);
