@@ -35,8 +35,8 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
 
 void VescHandler::requestState() {
     if (send_can_func_) {
-        auto frame = vesc_nexus::createRequestValuesFrame(can_id_);
-        send_can_func_(frame);
+        //auto frame = vesc_nexus::createRequestValuesFrame(can_id_);
+        //send_can_func_(frame);
     }
 }
 
