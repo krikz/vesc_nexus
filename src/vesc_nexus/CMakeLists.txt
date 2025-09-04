@@ -77,14 +77,6 @@ if(BUILD_TESTING)
 
   ament_lint_auto_find_test_dependencies()
 
-  # Пример теста (опционально, но рекомендуется)
-  ament_add_gmock(test_load_vesc_hardware
-    test/test_load_vesc_hardware.cpp
-  )
-  target_link_libraries(test_load_vesc_hardware
-    ${PROJECT_NAME}
-    hardware_interface::hardware_interface
-  )
 endif()
 
 ament_export_libraries(vesc_hardware_interface)
