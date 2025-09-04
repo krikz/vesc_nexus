@@ -49,3 +49,30 @@ ament_auto_package(
     launch
     config
 )
+
+
+find_package(hardware_interface REQUIRED)
+find_package(controller_manager REQUIRED)
+
+# Добавьте ваш hardware_interface библиотеку
+add_library(vesc_hardware_interface SHARED
+  src/vesc_hardware_interface.cpp
+)
+target_link_libraries(vesc_hardware_interface
+  ${PROJECT_NAME}
+  hardware_interface
+)
+target_include_directories(vesc_hardware_interface PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(vesc_hardware_interface
+  rclcpp
+  hardware_interface
+  ${PROJECT_NAME}
+)
+
+# Установка
+install(TARGETS vesc_hardware_interface
+  DESTINATION lib
+)

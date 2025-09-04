@@ -34,4 +34,5 @@ ENV ROS_DOMAIN_ID=0
 ENV ROS_LOCALHOST_ONLY=0
 
 # Команда по умолчанию — запуск драйвера
-CMD ["bash", "-c", "source /ws/install/setup.bash && ros2 launch vesc_nexus vesc_nexus_node.launch.py"]
+#CMD ["bash", "-c", "source /ws/install/setup.bash && ros2 launch vesc_nexus vesc_nexus_node.launch.py"]
+CMD ["bash", "-c", "source /ws/install/setup.bash && ros2 launch vesc_nexus diff_drive.launch.py"]
