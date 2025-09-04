@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
   ros-humble-controller-manager \
   ros-humble-hardware-interface \
   ros-humble-pluginlib \
+  ros-humble-xacro \
   && rm -rf /var/lib/apt/lists/*
 
 # Рабочая директория
