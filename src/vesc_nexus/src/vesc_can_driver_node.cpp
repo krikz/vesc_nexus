@@ -24,6 +24,9 @@ public:
         this->declare_parameter("vesc_ids", std::vector<int64_t>{1, 2, 3, 4});
         this->declare_parameter("wheel_labels", std::vector<std::string>{"front_left", "front_right", "rear_left", "rear_right"});
         this->declare_parameter("publish_rate", 100.0);
+        this->declare_parameter("wheel_radii", std::vector<double>{0.1, 0.1, 0.1, 0.1});
+        this->declare_parameter("wheel_poles", std::vector<int>{30, 30, 30, 30});
+        this->declare_parameter("wheel_abs_min_erpm", std::vector<double>{900, 900, 900, 900});
 
         std::string can_if;
         this->get_parameter("can_interface", can_if);
@@ -34,8 +37,19 @@ public:
         double publish_rate;
         this->get_parameter("publish_rate", publish_rate);
 
-        if (vesc_ids.size() != labels.size()) {
-            RCLCPP_FATAL(this->get_logger(), "Mismatch: %zu vesc_ids but %zu wheel_labels!", vesc_ids.size(), labels.size());
+        std::vector<double> wheel_radii;
+        this->get_parameter("wheel_radii", wheel_radii);
+        std::vector<int> wheel_poles;
+        this->get_parameter("wheel_poles", wheel_poles);
+        std::vector<double> wheel_min_erpm;
+        this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
+
+
+        if (!(vesc_ids.size() == labels.size() &&
+            labels.size() == wheel_radii.size() &&
+            wheel_radii.size() == wheel_poles.size() &&
+            wheel_poles.size() == wheel_min_erpm.size())) {
+            RCLCPP_FATAL(this->get_logger(), "Mismatch in configuration array sizes!");
             rclcpp::shutdown();
             return;
         }
@@ -62,6 +76,9 @@ public:
             auto handler = std::make_shared<VescHandler>(
                 static_cast<uint8_t>(vesc_ids[i]),
                 labels[i],
+                wheel_radii[i],
+                wheel_poles[i],
+                wheel_min_erpm[i],
                 limits
             );
 
@@ -131,7 +148,7 @@ public:
                         last_command_.valid = false;
                         sendSpeedToWheels(0.0, 0.0);  // стоп
                     } else {
-                        sendSpeedToWheels(last_command_.left_rpm, last_command_.right_rpm);
+                        sendSpeedToWheels(last_command_.left_mps, last_command_.right_mps);
                     }
                 } else {
                     sendSpeedToWheels(0.0, 0.0);  // безопасная остановка
@@ -153,8 +170,8 @@ public:
 private:
     // В private: секции узла
     struct WheelSpeedCommand {
-        double left_rpm = 0.0;
-        double right_rpm = 0.0;
+        double left_mps = 0.0;
+        double right_mps = 0.0;
         rclcpp::Time stamp;
         bool valid = false;
     } last_command_;
@@ -169,13 +186,13 @@ private:
             }
         }
     }
-    void sendSpeedToWheels(double left_rpm, double right_rpm) {
+    void sendSpeedToWheels(double left_mps, double right_mps) {
         for (auto& handler : vesc_handlers_) {
             std::string label = handler->getLabel();
             if (label.find("left") != std::string::npos) {
-                handler->sendSpeed(left_rpm);
+                handler->sendSpeed(left_mps);
             } else if (label.find("right") != std::string::npos) {
-                handler->sendSpeed(right_rpm);
+                handler->sendSpeed(right_mps);
             }
         }
     }
@@ -186,27 +203,16 @@ private:
 
         double linear = msg->linear.x;
         double angular = msg->angular.z;
-        double wheel_base = 0.3;
-        double wheel_radius = 0.23;  // метры
-
-        // Переводим м/с → RPM
-        auto mps_to_rpm = [wheel_radius](double mps) {
-            double circumference = 2.0 * M_PI * wheel_radius;
-            double rps = mps / circumference;
-            return rps * 60.0;  // RPM
-        };
+        double wheel_base = this->get_parameter("wheel_base").as_double();
 
         double left_mps = linear - angular * wheel_base / 2.0;
         double right_mps = linear + angular * wheel_base / 2.0;
 
-        double left_rpm = mps_to_rpm(left_mps) * 30;
-        double right_rpm = mps_to_rpm(right_mps) * 30;
-
-        RCLCPP_INFO(this->get_logger(), "Left: %.2f RPM, Right: %.2f RPM", left_rpm, right_rpm);
+        RCLCPP_INFO(this->get_logger(), "Left: %.2f MPS, Right: %.2f MPS", left_mps, right_mps);
 
         // Сохраняем команду
-        last_command_.left_rpm = left_rpm;
-        last_command_.right_rpm = right_rpm;
+        last_command_.left_mps = left_mps;
+        last_command_.right_mps = right_mps;
         last_command_.stamp = this->now();
         last_command_.valid = true;
     }

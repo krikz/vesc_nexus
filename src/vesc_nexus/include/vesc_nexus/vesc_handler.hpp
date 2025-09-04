@@ -12,9 +12,9 @@ public:
     using SendCanFrameFunc = std::function<bool(const struct can_frame&)>;
     using StateUpdateCallback = std::function<void(const vesc_msgs::msg::VescState&)>;
 
-    VescHandler(uint8_t can_id,
-                const std::string& label,
-                const vesc_nexus::CommandLimits& limits);
+    VescHandler(uint8_t can_id, const std::string& label,
+                double wheel_radius, int poles, double min_erpm,
+                const CommandLimits& limits = CommandLimits());
 
     void setSendCanFunc(SendCanFrameFunc func);
     void setStateUpdateCallback(StateUpdateCallback cb);
@@ -23,7 +23,7 @@ public:
     void requestState();  // Отправить COMM_GET_VALUES
     void sendDutyCycle(double duty);
     void sendCurrent(double current);
-    void sendSpeed(double rpm);
+    void sendSpeed(double linear_speed);
     void sendBrake(double brake);
     void sendPosition(double pos);
 
@@ -39,4 +39,8 @@ private:
 
     SendCanFrameFunc send_can_func_;
     StateUpdateCallback state_update_cb_;
+    
+    double wheel_radius_;     // радиус колеса
+    int pole_pairs_;          // количество пар полюсов (poles / 2)
+    double min_erpm_;         // минимальный ERPM для движения
 };
