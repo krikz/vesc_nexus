@@ -41,14 +41,16 @@ can_frame vesc_nexus::createSetCurrentFrame(uint8_t can_id, double current) {
 }
 
 // message_translator.cpp
+// В message_translator.cpp
 can_frame vesc_nexus::createSetSpeedFrame(uint8_t can_id, double rpm) {
     can_frame frame;
-    // Правильный 29-битный ID: (CAN_PACKET_SET_RPM << 8) | can_id
+    // Обнуляем весь фрейм
+    std::memset(&frame, 0, sizeof(frame));
+
     frame.can_id = ((CAN_PACKET_SET_RPM << 8) | can_id) | CAN_EFF_FLAG;
-    frame.can_dlc = 4;  // Только 4 байта данных!
+    frame.can_dlc = 4;
 
     int32_t value = static_cast<int32_t>(std::clamp(rpm, -23250.0, 23250.0));
-    // Big-endian запись
     frame.data[0] = (value >> 24) & 0xFF;
     frame.data[1] = (value >> 16) & 0xFF;
     frame.data[2] = (value >> 8)  & 0xFF;
