@@ -186,8 +186,8 @@ private:
 
         double linear = msg->linear.x;
         double angular = msg->angular.z;
-        double wheel_base = 0.5;
-        double wheel_radius = 0.1;  // метры
+        double wheel_base = 0.3;
+        double wheel_radius = 0.23;  // метры
 
         // Переводим м/с → RPM
         auto mps_to_rpm = [wheel_radius](double mps) {
@@ -199,8 +199,8 @@ private:
         double left_mps = linear - angular * wheel_base / 2.0;
         double right_mps = linear + angular * wheel_base / 2.0;
 
-        double left_rpm = mps_to_rpm(left_mps);
-        double right_rpm = mps_to_rpm(right_mps);
+        double left_rpm = mps_to_rpm(left_mps) * 15;
+        double right_rpm = mps_to_rpm(right_mps) * 15;
 
         RCLCPP_INFO(this->get_logger(), "Left: %.2f RPM, Right: %.2f RPM", left_rpm, right_rpm);
 
