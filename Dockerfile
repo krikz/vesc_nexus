@@ -24,6 +24,9 @@ RUN mkdir -p src
 # Копируем только ваш пакет vesc_nexus
 COPY . src/vesc_nexus
 
+# Проверка: где лежит hardware_interface?
+RUN find /opt/ros/humble -name "libhardware_interface.so" || echo "❌ libhardware_interface.so NOT FOUND!"
+
 # Сборка пакета
 RUN . /opt/ros/humble/setup.sh && \
     colcon build \
