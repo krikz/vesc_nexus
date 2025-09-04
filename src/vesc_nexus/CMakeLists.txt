@@ -44,7 +44,7 @@ add_library(vesc_hardware_interface SHARED
 )
 target_link_libraries(vesc_hardware_interface
   ${PROJECT_NAME}
-  hardware_interface
+  hardware_interface::hardware_interface
 )
 target_include_directories(vesc_hardware_interface PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
