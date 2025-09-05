@@ -13,7 +13,7 @@
       <state_interface name="position"/>
       <param name="can_id">49</param>
       <param name="poles">30</param>
-      <param name="min_erpm">900</param>
+      <param name="min_erpm">100</param>
       <param name="wheel_radius">0.115</param>
     </joint>
 
@@ -23,7 +23,7 @@
       <state_interface name="position"/>
       <param name="can_id">124</param>
       <param name="poles">30</param>
-      <param name="min_erpm">900</param>
+      <param name="min_erpm">100</param>
       <param name="wheel_radius">0.115</param>
     </joint>
 
@@ -33,7 +33,7 @@
       <state_interface name="position"/>
       <param name="can_id">81</param>
       <param name="poles">30</param>
-      <param name="min_erpm">900</param>
+      <param name="min_erpm">100</param>
       <param name="wheel_radius">0.115</param>
     </joint>
 
@@ -43,7 +43,7 @@
       <state_interface name="position"/>
       <param name="can_id">94</param>
       <param name="poles">30</param>
-      <param name="min_erpm">900</param>
+      <param name="min_erpm">100</param>
       <param name="wheel_radius">0.115</param>
     </joint>
   </ros2_control>
