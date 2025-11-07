@@ -6,7 +6,7 @@
     wheel_labels: ["front_left", "front_right", "rear_left", "rear_right"]
     wheel_radii: [0.115, 0.115, 0.115, 0.115]       # радиус в метрах
     wheel_poles: [30, 30, 30, 30]                  # количество полюсов (магнитов)
-    wheel_abs_min_erpm: [130, 130, 130, 130]       # минимальный ERPM для движения
+    wheel_abs_min_erpm: [20, 20, 20, 20]           # минимальный ERPM для движения (~0.016 m/s)
     wheel_base: 0.3                                # расстояние между передней и задней осью (м)
     publish_rate: 50.0
     speed_max: 23250.0
