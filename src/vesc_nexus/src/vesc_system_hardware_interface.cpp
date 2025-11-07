@@ -18,6 +18,13 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   can_interface_name_ = info.hardware_parameters.at("can_interface");
   publish_rate_ = std::stod(info.hardware_parameters.at("publish_rate"));
   wheel_radius_ = std::stod(info.hardware_parameters.at("wheel_radius"));
+  
+  // Читаем параметр command_timeout (опционально, по умолчанию 0.5 секунды)
+  if (info.hardware_parameters.find("command_timeout") != info.hardware_parameters.end()) {
+    command_timeout_ = std::stod(info.hardware_parameters.at("command_timeout"));
+  }
+  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    "Command timeout configured: %.2f seconds", command_timeout_);
 
   // Инициализация CAN
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_);
@@ -59,6 +66,9 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     hw_velocities_.push_back(0.0);
     hw_efforts_.push_back(0.0);
     cmd_velocities_.push_back(0.0);
+    
+    // Инициализация timeout tracking (время = 0 означает "никогда не было команды")
+    last_nonzero_cmd_time_.push_back(rclcpp::Time(0));
   }
 
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -136,11 +146,43 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
 }
 
 hardware_interface::return_type VescSystemHardwareInterface::write(
-  const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
+  const rclcpp::Time& time, const rclcpp::Duration& /*period*/) {
+  bool all_motors_idle = true;
+  
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
     double linear_speed = cmd_velocities_[i] * wheel_radius_;  // rad/s → m/s
-    vesc_handlers_[i]->sendSpeed(linear_speed);
+    
+    // Проверяем, есть ли ненулевая команда
+    if (std::abs(cmd_velocities_[i]) > 0.001) {  // Порог ~0.001 rad/s (игнорируем шум)
+      // Активная команда - обновляем timestamp и отправляем
+      last_nonzero_cmd_time_[i] = time;
+      vesc_handlers_[i]->sendSpeed(linear_speed);
+      all_motors_idle = false;
+      
+    } else {
+      // Нулевая команда - проверяем timeout
+      double time_since_last_cmd = (time - last_nonzero_cmd_time_[i]).seconds();
+      
+      if (time_since_last_cmd < command_timeout_) {
+        // Всё ещё в пределах timeout - отправляем ноль для активного торможения
+        vesc_handlers_[i]->sendSpeed(0.0);
+        all_motors_idle = false;
+      }
+      // else: Timeout истёк - НЕ отправляем команды, мотор расслабляется
+    }
   }
+  
+  // Логируем изменение состояния (только при переходе)
+  if (all_motors_idle && !motors_relaxed_) {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "All motors relaxed after %.2f seconds timeout", command_timeout_);
+    motors_relaxed_ = true;
+  } else if (!all_motors_idle && motors_relaxed_) {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "Motors activated by new command");
+    motors_relaxed_ = false;
+  }
+  
   return hardware_interface::return_type::OK;
 }
 
