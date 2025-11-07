@@ -95,32 +95,35 @@ void VescHandler::sendSpeed(double linear_speed) {
         last_freq_log_time_ = now;
     }
 
-    // Конвертируем линейную скорость в ERPM
-    double circumference = 2.0 * M_PI * wheel_radius_;
-    double rps = linear_speed / circumference;
-    double rpm = rps * 60.0;
-    double erpm = rpm * pole_pairs_;
-
-    // Ограничиваем по минимальному ERPM (чтобы преодолеть статическое трение)
-    if (std::abs(erpm) > 0 && std::abs(erpm) < min_erpm_) {
-        erpm = (erpm > 0) ? min_erpm_ : -min_erpm_;
-    }
+    // Конвертируем линейную скорость в duty cycle
+    // Duty cycle: -1.0 (полный назад) до +1.0 (полный вперед)
+    
+    // Определяем максимальную скорость (для нормализации)
+    const double max_linear_speed = 1.0;  // м/с, настраиваемое значение
+    
+    // Нормализуем скорость в диапазон -1.0 до +1.0
+    double duty_cycle = linear_speed / max_linear_speed;
+    
+    // Ограничиваем duty cycle в допустимых пределах
+    duty_cycle = std::clamp(duty_cycle, -1.0, 1.0);
 
     // Логируем изменения значений
     double speed_delta = std::abs(linear_speed - last_linear_speed_);
-    double erpm_delta = std::abs(erpm - last_erpm_);
+    int32_t duty_vesc = static_cast<int32_t>(duty_cycle * 100000.0);  // Для логов
+    double duty_delta = std::abs(duty_vesc - last_erpm_) / 100000.0;
     
-    if (speed_delta > 0.001 || erpm_delta > 1.0) {  // Логируем только значимые изменения
+    if (speed_delta > 0.001 || duty_delta > 0.001) {  // Логируем только значимые изменения
         RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                    "[%s] Speed: %.4f m/s → ERPM: %.1f (Δspeed: %.4f, ΔERPM: %.1f)",
-                    label_.c_str(), linear_speed, erpm, speed_delta, erpm_delta);
+                    "[%s] Speed: %.4f m/s → Duty: %.4f (%d) (Δspeed: %.4f, ΔDuty: %.4f)",
+                    label_.c_str(), linear_speed, duty_cycle, duty_vesc, 
+                    speed_delta, duty_delta);
     }
     
     last_linear_speed_ = linear_speed;
-    last_erpm_ = erpm;
+    last_erpm_ = duty_vesc;  // Используем для хранения duty cycle (в формате VESC)
 
-    // Отправляем ERPM
-    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm);
+    // Отправляем duty cycle (функция сама конвертирует в VESC формат)
+    auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty_cycle);
     send_can_func_(frame);
 }
 
