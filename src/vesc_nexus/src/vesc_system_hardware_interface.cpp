@@ -1,6 +1,7 @@
 // src/vesc_system_hardware_interface.cpp
 #include "vesc_nexus/vesc_system_hardware_interface.hpp"
 #include <rclcpp/rclcpp.hpp>
+#include <limits>
 #include <memory>
 
 namespace vesc_nexus {
@@ -121,6 +122,10 @@ std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::exp
     state_interfaces.emplace_back(joint.name, "velocity", &hw_velocities_[i]);
     state_interfaces.emplace_back(joint.name, "effort", &hw_efforts_[i]);
   }
+  
+  // Export battery voltage as sensor interface (aggregated from all VESCs)
+  state_interfaces.emplace_back("battery", "voltage", &hw_battery_voltage_);
+  
   return state_interfaces;
 }
 
@@ -142,6 +147,21 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
     hw_positions_[i] += hw_velocities_[i] * (1.0 / publish_rate_);
     hw_efforts_[i] = state.current_motor;  // Пример: ток как "усилие"
   }
+  
+  // Aggregate battery voltage: minimum excluding zeros (user requirement)
+  double min_voltage = std::numeric_limits<double>::max();
+  for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
+    const auto& state = vesc_handlers_[i]->getLastState();
+    if (state.voltage_input > 0.0) {  // Exclude zeros - disconnected/non-reporting VESCs
+      min_voltage = std::min(min_voltage, state.voltage_input);
+    }
+  }
+  // Update battery voltage if at least one VESC reported non-zero voltage
+  if (min_voltage != std::numeric_limits<double>::max()) {
+    hw_battery_voltage_ = min_voltage;
+  }
+  // If all VESCs report zero, hw_battery_voltage_ keeps previous value
+  
   return hardware_interface::return_type::OK;
 }
 

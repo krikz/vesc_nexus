@@ -49,6 +49,9 @@ private:
   std::vector<rclcpp::Time> last_nonzero_cmd_time_;
   double command_timeout_ = 0.5;  // seconds - configurable via URDF
   bool motors_relaxed_ = false;
+  
+  // Battery voltage monitoring (sensor interface)
+  double hw_battery_voltage_ = 0.0;  // Aggregated battery voltage (V) - minimum non-zero
 };
 
 }  // namespace vesc_nexus
