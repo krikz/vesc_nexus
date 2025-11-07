@@ -4,6 +4,7 @@
 #include <linux/can.h>
 #include <functional>
 #include <string>
+#include <chrono>
 #include "message_translator.hpp"
 #include <vesc_msgs/msg/vesc_state.hpp>
 
@@ -43,4 +44,8 @@ private:
     double wheel_radius_;     // радиус колеса
     int pole_pairs_;          // количество пар полюсов (poles / 2)
     int64_t min_erpm_;         // минимальный ERPM для движения
+    
+    // Для подсчёта частоты отправки команд
+    size_t send_speed_count_;
+    std::chrono::steady_clock::time_point last_freq_log_time_;
 };
