@@ -7,7 +7,8 @@ VescHandler::VescHandler(uint8_t can_id, const std::string& label,
                          double wheel_radius, int poles, int64_t min_erpm,
                          const vesc_nexus::CommandLimits& limits)
     : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
-     pole_pairs_(poles / 2), min_erpm_(min_erpm)
+     pole_pairs_(poles / 2), min_erpm_(min_erpm),
+     send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now())
 {
   RCLCPP_INFO(rclcpp::get_logger("VescHandler"), "Initialized VescHandler: "
         "label='%s', can_id=%d, wheel_radius=%.3fm, poles=%d (%d pole pairs), min_erpm=%ld",
@@ -76,6 +77,22 @@ void VescHandler::sendCurrent(double current) {
 
 void VescHandler::sendSpeed(double linear_speed) {
     if (!send_can_func_) return;
+
+    // Счётчик для подсчёта частоты отправки
+    send_speed_count_++;
+    
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_freq_log_time_).count();
+    
+    // Логируем частоту каждые 2 секунды
+    if (elapsed >= 2000) {
+        double frequency = (send_speed_count_ * 1000.0) / elapsed;
+        RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
+                    "[%s] sendSpeed frequency: %.1f Hz (sent %lu packets in %ld ms)", 
+                    label_.c_str(), frequency, send_speed_count_, elapsed);
+        send_speed_count_ = 0;
+        last_freq_log_time_ = now;
+    }
 
     // Конвертируем линейную скорость в ERPM
     double circumference = 2.0 * M_PI * wheel_radius_;
