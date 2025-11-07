@@ -48,4 +48,8 @@ private:
     // Для подсчёта частоты отправки команд
     size_t send_speed_count_;
     std::chrono::steady_clock::time_point last_freq_log_time_;
+    
+    // Для отслеживания изменений значений
+    double last_linear_speed_;
+    double last_erpm_;
 };

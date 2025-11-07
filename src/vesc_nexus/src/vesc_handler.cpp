@@ -8,7 +8,8 @@ VescHandler::VescHandler(uint8_t can_id, const std::string& label,
                          const vesc_nexus::CommandLimits& limits)
     : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
      pole_pairs_(poles / 2), min_erpm_(min_erpm),
-     send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now())
+     send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now()),
+     last_linear_speed_(0.0), last_erpm_(0.0)
 {
   RCLCPP_INFO(rclcpp::get_logger("VescHandler"), "Initialized VescHandler: "
         "label='%s', can_id=%d, wheel_radius=%.3fm, poles=%d (%d pole pairs), min_erpm=%ld",
@@ -104,6 +105,19 @@ void VescHandler::sendSpeed(double linear_speed) {
     if (std::abs(erpm) > 0 && std::abs(erpm) < min_erpm_) {
         erpm = (erpm > 0) ? min_erpm_ : -min_erpm_;
     }
+
+    // Логируем изменения значений
+    double speed_delta = std::abs(linear_speed - last_linear_speed_);
+    double erpm_delta = std::abs(erpm - last_erpm_);
+    
+    if (speed_delta > 0.001 || erpm_delta > 1.0) {  // Логируем только значимые изменения
+        RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                    "[%s] Speed: %.4f m/s → ERPM: %.1f (Δspeed: %.4f, ΔERPM: %.1f)",
+                    label_.c_str(), linear_speed, erpm, speed_delta, erpm_delta);
+    }
+    
+    last_linear_speed_ = linear_speed;
+    last_erpm_ = erpm;
 
     // Отправляем ERPM
     auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm);
