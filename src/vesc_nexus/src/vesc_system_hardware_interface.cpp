@@ -66,9 +66,9 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     hw_velocities_.push_back(0.0);
     hw_efforts_.push_back(0.0);
     cmd_velocities_.push_back(0.0);
-    
+
     // Инициализация timeout tracking - используем RCL_ROS_TIME для совместимости с time из write()
-    last_nonzero_cmd_time_.push_back(rclcpp::Time(0, RCL_ROS_TIME));
+    last_nonzero_cmd_time_.push_back(rclcpp::Time(static_cast<int64_t>(0), RCL_ROS_TIME));
   }
 
   return hardware_interface::CallbackReturn::SUCCESS;
