@@ -12,13 +12,13 @@ diff_drive_controller:
 
     # Левые колёса
     left_wheel_names:
-      - front_left_wheel
-      - rear_left_wheel
+      - left_front_wheel
+      - left_rear_wheel
 
     # Правые колёса
     right_wheel_names:
-      - front_right_wheel
-      - rear_right_wheel
+      - right_front_wheel
+      - right_rear_wheel
 
     # Расстояние между левыми и правыми колёсами
     wheel_separation: 0.3

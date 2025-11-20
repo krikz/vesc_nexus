@@ -7,7 +7,7 @@
       <param name="wheel_radius">0.115</param>
     </hardware>
 
-    <joint name="front_left_wheel" type="continuous">
+    <joint name="left_front_wheel" type="continuous">
       <command_interface name="velocity"/>
       <state_interface name="velocity"/>
       <state_interface name="position"/>
@@ -17,7 +17,7 @@
       <param name="wheel_radius">0.115</param>
     </joint>
 
-    <joint name="front_right_wheel" type="continuous">
+    <joint name="right_front_wheel" type="continuous">
       <command_interface name="velocity"/>
       <state_interface name="velocity"/>
       <state_interface name="position"/>
@@ -27,7 +27,7 @@
       <param name="wheel_radius">0.115</param>
     </joint>
 
-    <joint name="rear_left_wheel" type="continuous">
+    <joint name="left_rear_wheel" type="continuous">
       <command_interface name="velocity"/>
       <state_interface name="velocity"/>
       <state_interface name="position"/>
@@ -37,7 +37,7 @@
       <param name="wheel_radius">0.115</param>
     </joint>
 
-    <joint name="rear_right_wheel" type="continuous">
+    <joint name="right_rear_wheel" type="continuous">
       <command_interface name="velocity"/>
       <state_interface name="velocity"/>
       <state_interface name="position"/>
