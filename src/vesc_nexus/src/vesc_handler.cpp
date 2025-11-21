@@ -95,37 +95,35 @@ void VescHandler::sendSpeed(double linear_speed) {
         last_freq_log_time_ = now;
     }
 
-    // Конвертируем линейную скорость (м/с) в ERPM
-    // Шаг 1: линейная скорость → угловая скорость (rad/s)
-    double angular_velocity = linear_speed / wheel_radius_;  // rad/s
+    // Конвертируем линейную скорость в duty cycle
+    // Duty cycle: -1.0 (полный назад) до +1.0 (полный вперед)
     
-    // Шаг 2: угловая скорость → механические RPM
-    double rpm_mechanical = angular_velocity * (60.0 / (2.0 * M_PI));  // rad/s → RPM
+    // Определяем максимальную скорость (для нормализации)
+    const double max_linear_speed = 1.0;  // м/с, настраиваемое значение
     
-    // Шаг 3: механические RPM → ERPM
-    // ERPM = Механические_RPM × Количество_пар_полюсов
-    double erpm = rpm_mechanical * static_cast<double>(pole_pairs_);
+    // Нормализуем скорость в диапазон -1.0 до +1.0
+    double duty_cycle = linear_speed / max_linear_speed;
     
-    // Примечание: createSetSpeedFrame автоматически ограничивает ERPM в диапазоне [-23250, 23250]
-    // Для нашей конфигурации (pole_pairs=15, wheel_radius=0.115м) это соответствует ~18.67 м/с,
-    // что значительно превышает максимальную скорость робота (2 м/с), так что ограничение не активируется
+    // Ограничиваем duty cycle в допустимых пределах
+    duty_cycle = std::clamp(duty_cycle, -1.0, 1.0);
 
     // Логируем изменения значений
     double speed_delta = std::abs(linear_speed - last_linear_speed_);
-    double erpm_delta = std::abs(erpm - last_erpm_);
+    int32_t duty_vesc = static_cast<int32_t>(duty_cycle * 100000.0);  // Для логов
+    double duty_delta = std::abs(duty_vesc - last_erpm_) / 100000.0;
     
-    if (speed_delta > 0.001 || erpm_delta > 1.0) {  // Логируем только значимые изменения
+    if (speed_delta > 0.001 || duty_delta > 0.001) {  // Логируем только значимые изменения
         RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                    "[%s] Speed: %.4f m/s → RPM: %.1f → ERPM: %.1f (Δspeed: %.4f, ΔERPM: %.1f)",
-                    label_.c_str(), linear_speed, rpm_mechanical, erpm, 
-                    speed_delta, erpm_delta);
+                    "[%s] Speed: %.4f m/s → Duty: %.4f (%d) (Δspeed: %.4f, ΔDuty: %.4f)",
+                    label_.c_str(), linear_speed, duty_cycle, duty_vesc, 
+                    speed_delta, duty_delta);
     }
     
     last_linear_speed_ = linear_speed;
-    last_erpm_ = erpm;
+    last_erpm_ = duty_vesc;  // Используем для хранения duty cycle (в формате VESC)
 
-    // Отправляем ERPM команду
-    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm);
+    // Отправляем duty cycle (функция сама конвертирует в VESC формат)
+    auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty_cycle);
     send_can_func_(frame);
 }
 

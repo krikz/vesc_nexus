@@ -52,6 +52,6 @@ private:
     std::chrono::steady_clock::time_point last_freq_log_time_;
     
     // Для отслеживания изменений значений
-    double last_linear_speed_;  // последняя линейная скорость (м/с)
-    double last_erpm_;          // последний ERPM для логирования изменений
+    double last_linear_speed_;
+    double last_erpm_;
 };
