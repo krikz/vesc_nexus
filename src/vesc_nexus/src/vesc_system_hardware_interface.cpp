@@ -142,8 +142,23 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
   const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
     const auto& state = vesc_handlers_[i]->getLastState();
-    double rpm = state.speed_rpm;
-    hw_velocities_[i] = rpm * (2.0 * M_PI / 60.0);  // RPM → rad/s
+    double erpm = state.speed_rpm;  // Это ERPM (электрические обороты), а не механические!
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Конвертируем ERPM в механические RPM
+    // ERPM = Механические_RPM × Количество_пар_полюсов
+    int pole_pairs = vesc_handlers_[i]->getPolePairs();
+    
+    // Защита от деления на ноль
+    if (pole_pairs <= 0) {
+      RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescSystemHardwareInterface"),
+        "Invalid pole_pairs (%d) for handler %zu. Skipping velocity calculation.", pole_pairs, i);
+      hw_velocities_[i] = 0.0;
+      continue;
+    }
+    
+    double rpm_mechanical = erpm / static_cast<double>(pole_pairs);  // ERPM → механические RPM
+    
+    hw_velocities_[i] = rpm_mechanical * (2.0 * M_PI / 60.0);  // Механические RPM → rad/s
     hw_positions_[i] += hw_velocities_[i] * (1.0 / publish_rate_);
     hw_efforts_[i] = state.current_motor;  // Пример: ток как "усилие"
   }
@@ -170,7 +185,17 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
   bool all_motors_idle = true;
   
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
-    double linear_speed = cmd_velocities_[i] * wheel_radius_;  // rad/s → m/s
+    // Используем индивидуальный радиус каждого колеса вместо глобального
+    double wheel_radius = vesc_handlers_[i]->getWheelRadius();
+    
+    // Защита от некорректного радиуса колеса
+    if (wheel_radius <= 0.0) {
+      RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescSystemHardwareInterface"),
+        "Invalid wheel_radius (%.3f) for handler %zu. Skipping command.", wheel_radius, i);
+      continue;
+    }
+    
+    double linear_speed = cmd_velocities_[i] * wheel_radius;  // rad/s → m/s
     
     // Проверяем, есть ли ненулевая команда
     if (std::abs(cmd_velocities_[i]) > 0.001) {  // Порог ~0.001 rad/s (игнорируем шум)
