@@ -105,6 +105,10 @@ void VescHandler::sendSpeed(double linear_speed) {
     // Шаг 3: механические RPM → ERPM
     // ERPM = Механические_RPM × Количество_пар_полюсов
     double erpm = rpm_mechanical * static_cast<double>(pole_pairs_);
+    
+    // Примечание: createSetSpeedFrame автоматически ограничивает ERPM в диапазоне [-23250, 23250]
+    // Для нашей конфигурации (pole_pairs=15, wheel_radius=0.115м) это соответствует ~18.67 м/с,
+    // что значительно превышает максимальную скорость робота (2 м/с), так что ограничение не активируется
 
     // Логируем изменения значений
     double speed_delta = std::abs(linear_speed - last_linear_speed_);
