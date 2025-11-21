@@ -145,7 +145,8 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
     double erpm = state.speed_rpm;  // Это ERPM (электрические обороты), а не механические!
     
     // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Конвертируем ERPM в механические RPM
-    // ERPM = Механические_RPM × Количество_пар_полюсов
+    // ERPM = Механические_RPM × Количество_полюсов
+    // Для корректной одометрии делим на количество полюсов (poles), а не пар полюсов
     int pole_pairs = vesc_handlers_[i]->getPolePairs();
     
     // Защита от деления на ноль
@@ -156,7 +157,8 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
       continue;
     }
     
-    double rpm_mechanical = erpm / static_cast<double>(pole_pairs);  // ERPM → механические RPM
+    // Делим на количество полюсов (pole_pairs * 2) для правильной конвертации ERPM → RPM
+    double rpm_mechanical = erpm / (static_cast<double>(pole_pairs) * 2.0);  // ERPM → механические RPM
     
     hw_velocities_[i] = rpm_mechanical * (2.0 * M_PI / 60.0);  // Механические RPM → rad/s
     hw_positions_[i] += hw_velocities_[i] * (1.0 / publish_rate_);
