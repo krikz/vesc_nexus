@@ -32,6 +32,7 @@ public:
     std::string getLabel() const;
     vesc_msgs::msg::VescState getLastState() const;
     double getWheelRadius() const;
+    int getPolePairs() const;
 
 private:
     uint8_t can_id_;

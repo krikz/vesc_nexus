@@ -156,3 +156,7 @@ vesc_msgs::msg::VescState VescHandler::getLastState() const {
 double VescHandler::getWheelRadius() const {
     return wheel_radius_;
 }
+
+int VescHandler::getPolePairs() const {
+    return pole_pairs_;
+}
