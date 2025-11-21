@@ -170,7 +170,9 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
   bool all_motors_idle = true;
   
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
-    double linear_speed = cmd_velocities_[i] * wheel_radius_;  // rad/s → m/s
+    // Используем индивидуальный радиус каждого колеса вместо глобального
+    double wheel_radius = vesc_handlers_[i]->getWheelRadius();
+    double linear_speed = cmd_velocities_[i] * wheel_radius;  // rad/s → m/s
     
     // Проверяем, есть ли ненулевая команда
     if (std::abs(cmd_velocities_[i]) > 0.001) {  // Порог ~0.001 rad/s (игнорируем шум)
