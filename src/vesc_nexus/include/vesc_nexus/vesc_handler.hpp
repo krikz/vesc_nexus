@@ -31,6 +31,7 @@ public:
     uint8_t getCanId() const;
     std::string getLabel() const;
     vesc_msgs::msg::VescState getLastState() const;
+    double getWheelRadius() const;
 
 private:
     uint8_t can_id_;
