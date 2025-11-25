@@ -75,8 +75,9 @@ public:
         }
         
         // Дополняем wheel_max_speeds если нужно
+        constexpr double DEFAULT_MAX_SPEED_MPS = 1.0;  // Максимальная скорость по умолчанию (м/с)
         if (wheel_max_speeds.size() < vesc_ids.size()) {
-            double default_max_speed = wheel_max_speeds.empty() ? 1.0 : wheel_max_speeds.back();
+            double default_max_speed = wheel_max_speeds.empty() ? DEFAULT_MAX_SPEED_MPS : wheel_max_speeds.back();
             while (wheel_max_speeds.size() < vesc_ids.size()) {
                 wheel_max_speeds.push_back(default_max_speed);
             }
