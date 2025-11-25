@@ -5,7 +5,6 @@
 #include <functional>
 #include <string>
 #include <chrono>
-#include <vector>
 #include "message_translator.hpp"
 #include "duty_calibration.hpp"
 #include <vesc_msgs/msg/vesc_state.hpp>
@@ -37,31 +36,19 @@ public:
     int getPolePairs() const;
 
     /**
-     * @brief Установить максимальную скорость для калибровки
-     * @param max_speed_mps Максимальная линейная скорость при duty=1.0 (м/с)
-     */
-    void setMaxSpeed(double max_speed_mps);
-
-    /**
-     * @brief Установить калибровочную таблицу для duty cycle → скорость
-     * @param duty_values Вектор значений duty cycle
-     * @param speed_values Вектор соответствующих скоростей (м/с)
+     * @brief Установить максимальные обороты в секунду при duty = 100%
+     * @param max_rps Обороты в секунду (замерить при калибровке: RPM / 60)
      * 
-     * Оба вектора должны иметь одинаковую длину.
-     * Калибровочные точки будут автоматически отсортированы.
+     * КАЛИБРОВКА:
+     * 1. Поставить робота на подставку (колёса должны свободно крутиться)
+     * 2. Подать duty = 100% на колесо
+     * 3. Замерить RPM из телеметрии VESC
+     * 4. max_rps = RPM / 60
      */
-    void setCalibrationTable(const std::vector<double>& duty_values,
-                             const std::vector<double>& speed_values);
+    void setMaxRps(double max_rps);
 
     /**
-     * @brief Добавить одну калибровочную точку
-     * @param duty Значение duty cycle
-     * @param speed_mps Измеренная скорость (м/с)
-     */
-    void addCalibrationPoint(double duty, double speed_mps);
-
-    /**
-     * @brief Получить калибровочную таблицу
+     * @brief Получить калибровочный объект
      */
     const vesc_nexus::DutyCalibrationTable& getCalibrationTable() const;
 
@@ -78,7 +65,7 @@ private:
     int pole_pairs_;          // количество пар полюсов (poles / 2)
     int64_t min_erpm_;         // минимальный ERPM для движения
     
-    // Калибровочная таблица для duty cycle → скорость
+    // Калибровка duty cycle → скорость
     vesc_nexus::DutyCalibrationTable calibration_table_;
     
     // Для подсчёта частоты отправки команд
@@ -87,5 +74,5 @@ private:
     
     // Для отслеживания изменений значений
     double last_linear_speed_;
-    double last_erpm_;
+    double last_duty_;
 };

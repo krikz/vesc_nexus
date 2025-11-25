@@ -29,21 +29,10 @@ public:
         this->declare_parameter("wheel_abs_min_erpm", std::vector<int64_t>{900, 900, 900, 900});
         this->declare_parameter("wheel_base", 0.3);
         
-        // Параметры калибровки скорости для каждого колеса
-        // max_speed_mps - максимальная скорость при duty=1.0 (линейная модель)
-        this->declare_parameter("wheel_max_speeds", std::vector<double>{1.0, 1.0, 1.0, 1.0});
-        
-        // Калибровочные таблицы для каждого колеса (опционально)
-        // Формат: массив пар [duty1, speed1, duty2, speed2, ...]
-        // Если не задано - используется линейная модель
-        this->declare_parameter("calibration.front_left.duty_values", std::vector<double>{});
-        this->declare_parameter("calibration.front_left.speed_values", std::vector<double>{});
-        this->declare_parameter("calibration.front_right.duty_values", std::vector<double>{});
-        this->declare_parameter("calibration.front_right.speed_values", std::vector<double>{});
-        this->declare_parameter("calibration.rear_left.duty_values", std::vector<double>{});
-        this->declare_parameter("calibration.rear_left.speed_values", std::vector<double>{});
-        this->declare_parameter("calibration.rear_right.duty_values", std::vector<double>{});
-        this->declare_parameter("calibration.rear_right.speed_values", std::vector<double>{});
+        // КАЛИБРОВКА: максимальные обороты в секунду при duty = 100%
+        // Измеряется: подать duty=100%, замерить RPM из телеметрии VESC, разделить на 60
+        // Пример: если при duty=100% колесо делает 900 RPM → wheel_max_rps = 15.0
+        this->declare_parameter("wheel_max_rps", std::vector<double>{15.0, 15.0, 15.0, 15.0});
 
         std::string can_if;
         this->get_parameter("can_interface", can_if);
@@ -60,8 +49,8 @@ public:
         this->get_parameter("wheel_poles", wheel_poles);
         std::vector<int64_t> wheel_min_erpm;
         this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
-        std::vector<double> wheel_max_speeds;
-        this->get_parameter("wheel_max_speeds", wheel_max_speeds);
+        std::vector<double> wheel_max_rps;
+        this->get_parameter("wheel_max_rps", wheel_max_rps);
 
         this->get_parameter("wheel_base", wheel_base_);
 
@@ -74,12 +63,12 @@ public:
             return;
         }
         
-        // Дополняем wheel_max_speeds если нужно
-        constexpr double DEFAULT_MAX_SPEED_MPS = 1.0;  // Максимальная скорость по умолчанию (м/с)
-        if (wheel_max_speeds.size() < vesc_ids.size()) {
-            double default_max_speed = wheel_max_speeds.empty() ? DEFAULT_MAX_SPEED_MPS : wheel_max_speeds.back();
-            while (wheel_max_speeds.size() < vesc_ids.size()) {
-                wheel_max_speeds.push_back(default_max_speed);
+        // Дополняем wheel_max_rps если нужно
+        constexpr double DEFAULT_MAX_RPS = 15.0;  // 15 об/сек по умолчанию (900 RPM)
+        if (wheel_max_rps.size() < vesc_ids.size()) {
+            double default_rps = wheel_max_rps.empty() ? DEFAULT_MAX_RPS : wheel_max_rps.back();
+            while (wheel_max_rps.size() < vesc_ids.size()) {
+                wheel_max_rps.push_back(default_rps);
             }
         }
 
@@ -98,7 +87,6 @@ public:
 
         // Параметры
         vesc_nexus::CommandLimits limits;
-        // ... загрузи limits ...
 
         // Создание обработчиков
         for (size_t i = 0; i < vesc_ids.size(); ++i) {
@@ -111,31 +99,14 @@ public:
                 limits
             );
 
-            // Установка максимальной скорости для калибровки
-            handler->setMaxSpeed(wheel_max_speeds[i]);
-
-            // Загрузка калибровочной таблицы если задана
-            std::string duty_param = "calibration." + labels[i] + ".duty_values";
-            std::string speed_param = "calibration." + labels[i] + ".speed_values";
+            // Установка калибровки: max_rps при duty=100%
+            handler->setMaxRps(wheel_max_rps[i]);
             
-            std::vector<double> duty_values, speed_values;
-            this->get_parameter(duty_param, duty_values);
-            this->get_parameter(speed_param, speed_values);
-            
-            if (!duty_values.empty() && duty_values.size() == speed_values.size()) {
-                handler->setCalibrationTable(duty_values, speed_values);
-                RCLCPP_INFO(this->get_logger(), 
-                           "[%s] Loaded calibration table with %zu points",
-                           labels[i].c_str(), duty_values.size());
-            } else if (!duty_values.empty()) {
-                RCLCPP_WARN(this->get_logger(),
-                           "[%s] Calibration table size mismatch: duty=%zu, speed=%zu. Using linear model.",
-                           labels[i].c_str(), duty_values.size(), speed_values.size());
-            } else {
-                RCLCPP_INFO(this->get_logger(),
-                           "[%s] Using linear calibration model (max_speed=%.2f m/s)",
-                           labels[i].c_str(), wheel_max_speeds[i]);
-            }
+            // Расчёт максимальной линейной скорости для логов
+            double max_speed_mps = 2.0 * M_PI * wheel_max_rps[i] * wheel_radii[i];
+            RCLCPP_INFO(this->get_logger(),
+                       "[%s] Калибровка: max_rps=%.1f об/сек → max_speed=%.2f м/с (при duty=100%%)",
+                       labels[i].c_str(), wheel_max_rps[i], max_speed_mps);
 
             // Установка отправки CAN
             handler->setSendCanFunc([this](const auto& f) {
