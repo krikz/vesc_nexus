@@ -100,13 +100,8 @@ public:
             );
 
             // Установка калибровки: max_rps при duty=100%
+            // Используйте tools/calibrate_max_rpm.py для автоматической калибровки
             handler->setMaxRps(wheel_max_rps[i]);
-            
-            // Расчёт максимальной линейной скорости для логов
-            double max_speed_mps = 2.0 * M_PI * wheel_max_rps[i] * wheel_radii[i];
-            RCLCPP_INFO(this->get_logger(),
-                       "[%s] Калибровка: max_rps=%.1f об/сек → max_speed=%.2f м/с (при duty=100%%)",
-                       labels[i].c_str(), wheel_max_rps[i], max_speed_mps);
 
             // Установка отправки CAN
             handler->setSendCanFunc([this](const auto& f) {

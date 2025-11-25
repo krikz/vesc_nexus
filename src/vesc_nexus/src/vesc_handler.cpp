@@ -8,15 +8,26 @@ VescHandler::VescHandler(uint8_t can_id, const std::string& label,
                          const vesc_nexus::CommandLimits& limits)
     : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
      pole_pairs_(poles / 2), min_erpm_(min_erpm),
-     calibration_table_(15.0, wheel_radius, label),  // По умолчанию 15 об/сек при duty=100%
+     max_rps_(15.0),  // По умолчанию 15 об/сек при duty=100%
      send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now()),
      last_linear_speed_(0.0), last_duty_(0.0)
 {
-  RCLCPP_INFO(rclcpp::get_logger("VescHandler"), "Initialized VescHandler: "
+    updateMaxSpeed();
+    
+    RCLCPP_INFO(rclcpp::get_logger("VescHandler"), "Initialized VescHandler: "
         "label='%s', can_id=%d, wheel_radius=%.3fm, poles=%d (%d pole pairs), min_erpm=%ld",
         label_.c_str(), can_id_, wheel_radius_, poles, pole_pairs_, min_erpm_);
     last_state_.label = label;
     last_state_.alive = false;
+}
+
+void VescHandler::updateMaxSpeed() {
+    // max_speed = 2π × max_rps × wheel_radius
+    max_speed_mps_ = 2.0 * M_PI * max_rps_ * wheel_radius_;
+}
+
+double VescHandler::clamp(double value, double lo, double hi) const {
+    return (value < lo) ? lo : (value > hi) ? hi : value;
 }
 
 void VescHandler::setSendCanFunc(SendCanFrameFunc func) {
@@ -89,17 +100,19 @@ void VescHandler::sendSpeed(double linear_speed) {
         double frequency = (send_speed_count_ * 1000.0) / elapsed;
         RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
                     "[%s] sendSpeed: freq=%.1f Hz, max_rps=%.1f, max_speed=%.2f m/s", 
-                    label_.c_str(), frequency,
-                    calibration_table_.getMaxRps(),
-                    calibration_table_.getMaxSpeed());
+                    label_.c_str(), frequency, max_rps_, max_speed_mps_);
         send_speed_count_ = 0;
         last_freq_log_time_ = now;
     }
 
     // Конвертируем линейную скорость (м/с) в duty cycle
     // Формула: duty = target_speed / max_speed
-    // где max_speed рассчитывается из калибровки: max_speed = 2π * max_rps * wheel_radius
-    double duty_cycle = calibration_table_.speedToDuty(linear_speed);
+    // где max_speed = 2π × max_rps × wheel_radius (расчитано в updateMaxSpeed)
+    double duty_cycle = 0.0;
+    if (max_speed_mps_ > 0.0) {
+        duty_cycle = linear_speed / max_speed_mps_;
+        duty_cycle = clamp(duty_cycle, -1.0, 1.0);
+    }
 
     // Логируем изменения значений
     double speed_delta = std::abs(linear_speed - last_linear_speed_);
@@ -155,13 +168,9 @@ int VescHandler::getPolePairs() const {
 }
 
 void VescHandler::setMaxRps(double max_rps) {
-    calibration_table_.setMaxRps(max_rps);
+    max_rps_ = max_rps;
+    updateMaxSpeed();
     RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                "[%s] Калибровка: max_rps=%.1f об/сек → max_speed=%.2f м/с "
-                "(при duty=100%% колесо делает %.1f об/сек)",
-                label_.c_str(), max_rps, calibration_table_.getMaxSpeed(), max_rps);
-}
-
-const vesc_nexus::DutyCalibrationTable& VescHandler::getCalibrationTable() const {
-    return calibration_table_;
+                "[%s] Калибровка: max_rps=%.1f об/сек → max_speed=%.2f м/с",
+                label_.c_str(), max_rps_, max_speed_mps_);
 }
