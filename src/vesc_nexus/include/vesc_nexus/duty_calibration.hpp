@@ -13,6 +13,8 @@ namespace vesc_nexus {
 
 namespace detail {
 // Собственная реализация clamp для совместимости с C++14
+// (std::clamp доступен только начиная с C++17)
+// Проект использует C++14 согласно CMakeLists.txt
 template<typename T>
 constexpr const T& clamp(const T& value, const T& lo, const T& hi) {
     return (value < lo) ? lo : (value > hi) ? hi : value;
