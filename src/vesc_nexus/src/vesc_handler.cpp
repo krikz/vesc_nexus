@@ -8,6 +8,7 @@ VescHandler::VescHandler(uint8_t can_id, const std::string& label,
                          const vesc_nexus::CommandLimits& limits)
     : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
      pole_pairs_(poles / 2), min_erpm_(min_erpm),
+     calibration_table_(1.0, label),  // По умолчанию max_speed = 1.0 м/с
      send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now()),
      last_linear_speed_(0.0), last_erpm_(0.0)
 {
@@ -89,23 +90,20 @@ void VescHandler::sendSpeed(double linear_speed) {
     if (elapsed >= 2000) {
         double frequency = (send_speed_count_ * 1000.0) / elapsed;
         RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
-                    "[%s] sendSpeed frequency: %.1f Hz (sent %lu packets in %ld ms)", 
-                    label_.c_str(), frequency, send_speed_count_, elapsed);
+                    "[%s] sendSpeed frequency: %.1f Hz (sent %lu packets in %ld ms), "
+                    "calibration: %s (max_speed=%.2f m/s, points=%zu)", 
+                    label_.c_str(), frequency, send_speed_count_, elapsed,
+                    calibration_table_.isLinearModel() ? "linear" : "table",
+                    calibration_table_.getMaxSpeed(),
+                    calibration_table_.getCalibrationPointCount());
         send_speed_count_ = 0;
         last_freq_log_time_ = now;
     }
 
-    // Конвертируем линейную скорость в duty cycle
-    // Duty cycle: -1.0 (полный назад) до +1.0 (полный вперед)
-    
-    // Определяем максимальную скорость (для нормализации)
-    const double max_linear_speed = 1.0;  // м/с, настраиваемое значение
-    
-    // Нормализуем скорость в диапазон -1.0 до +1.0
-    double duty_cycle = linear_speed / max_linear_speed;
-    
-    // Ограничиваем duty cycle в допустимых пределах
-    duty_cycle = std::clamp(duty_cycle, -1.0, 1.0);
+    // Используем калибровочную таблицу для преобразования скорости в duty cycle
+    // Это устраняет рывки, так как учитывает нелинейность двигателя и индивидуальные
+    // особенности каждого колеса
+    double duty_cycle = calibration_table_.speedToDuty(linear_speed);
 
     // Логируем изменения значений
     double speed_delta = std::abs(linear_speed - last_linear_speed_);
@@ -159,4 +157,44 @@ double VescHandler::getWheelRadius() const {
 
 int VescHandler::getPolePairs() const {
     return pole_pairs_;
+}
+
+void VescHandler::setMaxSpeed(double max_speed_mps) {
+    calibration_table_.setMaxSpeed(max_speed_mps);
+    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                "[%s] Max speed set to %.3f m/s", label_.c_str(), max_speed_mps);
+}
+
+void VescHandler::setCalibrationTable(const std::vector<double>& duty_values,
+                                       const std::vector<double>& speed_values) {
+    if (duty_values.size() != speed_values.size()) {
+        RCLCPP_ERROR(rclcpp::get_logger("VescHandler"),
+                     "[%s] Calibration error: duty_values size (%zu) != speed_values size (%zu)",
+                     label_.c_str(), duty_values.size(), speed_values.size());
+        return;
+    }
+
+    std::vector<vesc_nexus::DutyCalibrationTable::CalibrationPoint> points;
+    points.reserve(duty_values.size());
+    
+    for (size_t i = 0; i < duty_values.size(); ++i) {
+        points.emplace_back(duty_values[i], speed_values[i]);
+    }
+    
+    calibration_table_.setCalibrationPoints(points);
+    
+    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                "[%s] Calibration table loaded with %zu points (max_speed=%.3f m/s)",
+                label_.c_str(), points.size(), calibration_table_.getMaxSpeed());
+}
+
+void VescHandler::addCalibrationPoint(double duty, double speed_mps) {
+    calibration_table_.addCalibrationPoint(duty, speed_mps);
+    RCLCPP_DEBUG(rclcpp::get_logger("VescHandler"),
+                 "[%s] Added calibration point: duty=%.3f, speed=%.3f m/s",
+                 label_.c_str(), duty, speed_mps);
+}
+
+const vesc_nexus::DutyCalibrationTable& VescHandler::getCalibrationTable() const {
+    return calibration_table_;
 }
