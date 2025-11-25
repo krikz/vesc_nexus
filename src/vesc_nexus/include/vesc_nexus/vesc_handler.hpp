@@ -5,8 +5,8 @@
 #include <functional>
 #include <string>
 #include <chrono>
+#include <cmath>
 #include "message_translator.hpp"
-#include "duty_calibration.hpp"
 #include <vesc_msgs/msg/vesc_state.hpp>
 
 class VescHandler {
@@ -40,6 +40,8 @@ public:
      * @param max_rps Обороты в секунду (замерить при калибровке: RPM / 60)
      * 
      * КАЛИБРОВКА:
+     * Используйте скрипт tools/calibrate_max_rpm.py для автоматической калибровки
+     * или вручную:
      * 1. Поставить робота на подставку (колёса должны свободно крутиться)
      * 2. Подать duty = 100% на колесо
      * 3. Замерить RPM из телеметрии VESC
@@ -48,9 +50,14 @@ public:
     void setMaxRps(double max_rps);
 
     /**
-     * @brief Получить калибровочный объект
+     * @brief Получить максимальные обороты в секунду
      */
-    const vesc_nexus::DutyCalibrationTable& getCalibrationTable() const;
+    double getMaxRps() const { return max_rps_; }
+
+    /**
+     * @brief Получить максимальную линейную скорость (м/с)
+     */
+    double getMaxSpeed() const { return max_speed_mps_; }
 
 private:
     uint8_t can_id_;
@@ -63,10 +70,12 @@ private:
     
     double wheel_radius_;     // радиус колеса
     int pole_pairs_;          // количество пар полюсов (poles / 2)
-    int64_t min_erpm_;         // минимальный ERPM для движения
+    int64_t min_erpm_;        // минимальный ERPM для движения
     
-    // Калибровка duty cycle → скорость
-    vesc_nexus::DutyCalibrationTable calibration_table_;
+    // Калибровка: максимальные обороты при duty=100%
+    // Используйте tools/calibrate_max_rpm.py для измерения
+    double max_rps_ = 15.0;           // обороты в секунду при duty=100%
+    double max_speed_mps_ = 0.0;      // расчётная макс. скорость (м/с)
     
     // Для подсчёта частоты отправки команд
     size_t send_speed_count_;
@@ -75,4 +84,8 @@ private:
     // Для отслеживания изменений значений
     double last_linear_speed_;
     double last_duty_;
+    
+    // Вспомогательные функции
+    void updateMaxSpeed();
+    double clamp(double value, double lo, double hi) const;
 };
