@@ -3,14 +3,19 @@
 Скрипт автоматической калибровки максимальных оборотов VESC при duty=100%
 
 ИСПОЛЬЗОВАНИЕ:
-    python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --can-interface can0
+    python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --pole-pairs 15
 
 ОПИСАНИЕ:
     Для каждого VESC ID:
     1. Разгоняет колесо постепенно увеличивая duty cycle
-    2. Останавливается когда ERPM перестаёт значительно расти (насыщение)
+    2. Останавливается когда RPM перестаёт значительно расти (насыщение)
     3. Замеряет максимальные обороты в обоих направлениях (вперёд/назад)
-    4. Сохраняет результаты в YAML файл
+    4. Конвертирует ERPM в механический RPM через pole_pairs
+    5. Сохраняет результаты в YAML файл
+
+ВАЖНО:
+    --pole-pairs должен быть количество_полюсов / 2
+    Например: если у мотора 30 полюсов, то --pole-pairs 15
 
 ТРЕБОВАНИЯ:
     pip install python-can pyyaml
@@ -35,7 +40,7 @@ CAN_PACKET_STATUS = 9
 DUTY_STEP = 0.05          # Шаг увеличения duty (5%)
 DUTY_MAX = 1.0            # Максимальный duty cycle
 SETTLE_TIME = 1.0         # Время стабилизации оборотов (сек)
-RPM_CHANGE_THRESHOLD = 50 # Порог изменения RPM для детекции насыщения
+RPM_CHANGE_THRESHOLD = 5  # Порог изменения механического RPM для детекции насыщения
 MAX_ITERATIONS = 25       # Максимум итераций разгона
 
 
@@ -43,6 +48,8 @@ MAX_ITERATIONS = 25       # Максимум итераций разгона
 class CalibrationResult:
     """Результат калибровки одного колеса"""
     vesc_id: int
+    max_erpm_forward: float
+    max_erpm_backward: float
     max_rpm_forward: float
     max_rpm_backward: float
     max_duty_forward: float
@@ -55,8 +62,9 @@ class CalibrationResult:
 class VescCalibrator:
     """Калибратор для VESC моторов"""
     
-    def __init__(self, can_interface: str):
+    def __init__(self, can_interface: str, pole_pairs: int = 15):
         self.can_interface = can_interface
+        self.pole_pairs = pole_pairs  # количество пар полюсов (poles / 2)
         self.bus: Optional[can.Bus] = None
         self.current_rpm: Dict[int, float] = {}  # vesc_id → rpm
         
@@ -108,7 +116,9 @@ class VescCalibrator:
                 erpm = struct.unpack('>i', msg.data[0:4])[0]
                 current = struct.unpack('>h', msg.data[4:6])[0] / 10.0
                 duty = struct.unpack('>h', msg.data[6:8])[0] / 1000.0
-                return (vesc_id, erpm, current, duty)
+                # Конвертируем ERPM в механический RPM
+                mechanical_rpm = erpm / self.pole_pairs
+                return (vesc_id, mechanical_rpm, current, duty)
         except Exception:
             pass
         return None
@@ -139,13 +149,14 @@ class VescCalibrator:
             direction: 1 для вперёд, -1 для назад
             
         Returns:
-            (max_rpm, duty_at_max_rpm)
+            (max_erpm, max_rpm, duty_at_max_rpm)
         """
         direction_name = "ВПЕРЁД" if direction > 0 else "НАЗАД"
         print(f"\n  📊 Калибровка {direction_name}...")
         
         prev_rpm = 0.0
         max_rpm = 0.0
+        max_erpm = 0.0
         duty_at_max = 0.0
         
         for i in range(MAX_ITERATIONS):
@@ -159,6 +170,7 @@ class VescCalibrator:
             # Обновляем максимум
             if abs(current_rpm) > abs(max_rpm):
                 max_rpm = current_rpm
+                max_erpm = current_rpm * self.pole_pairs  # сохраняем ERPM для справки
                 duty_at_max = duty
             
             # Детекция насыщения: если RPM почти не растёт
@@ -176,7 +188,7 @@ class VescCalibrator:
         self.send_duty_cycle(vesc_id, 0.0)
         time.sleep(0.5)
         
-        return (abs(max_rpm), abs(duty_at_max))
+        return (abs(max_erpm), abs(max_rpm), abs(duty_at_max))
     
     def calibrate_wheel(self, vesc_id: int) -> CalibrationResult:
         """Полная калибровка одного колеса"""
@@ -185,14 +197,14 @@ class VescCalibrator:
         print(f"{'='*50}")
         
         # Калибровка вперёд
-        max_rpm_fwd, duty_fwd = self.find_max_rpm(vesc_id, direction=1)
+        max_erpm_fwd, max_rpm_fwd, duty_fwd = self.find_max_rpm(vesc_id, direction=1)
         
         # Пауза между направлениями
         print("\n  ⏸️  Пауза 2 сек...")
         time.sleep(2.0)
         
         # Калибровка назад
-        max_rpm_bwd, duty_bwd = self.find_max_rpm(vesc_id, direction=-1)
+        max_erpm_bwd, max_rpm_bwd, duty_bwd = self.find_max_rpm(vesc_id, direction=-1)
         
         # Результаты
         max_rps_fwd = max_rpm_fwd / 60.0
@@ -200,6 +212,8 @@ class VescCalibrator:
         
         result = CalibrationResult(
             vesc_id=vesc_id,
+            max_erpm_forward=max_erpm_fwd,
+            max_erpm_backward=max_erpm_bwd,
             max_rpm_forward=max_rpm_fwd,
             max_rpm_backward=max_rpm_bwd,
             max_duty_forward=duty_fwd,
@@ -210,18 +224,20 @@ class VescCalibrator:
         )
         
         print(f"\n  📋 Результаты:")
-        print(f"    Вперёд:  {max_rpm_fwd:.0f} RPM = {max_rps_fwd:.2f} об/сек при duty={duty_fwd:.2f}")
-        print(f"    Назад:   {max_rpm_bwd:.0f} RPM = {max_rps_bwd:.2f} об/сек при duty={duty_bwd:.2f}")
+        print(f"    Вперёд:  {max_erpm_fwd:.0f} ERPM = {max_rpm_fwd:.0f} RPM = {max_rps_fwd:.2f} об/сек при duty={duty_fwd:.2f}")
+        print(f"    Назад:   {max_erpm_bwd:.0f} ERPM = {max_rpm_bwd:.0f} RPM = {max_rps_bwd:.2f} об/сек при duty={duty_bwd:.2f}")
         
         return result
 
 
-def save_results(results: List[CalibrationResult], output_file: str):
+def save_results(results: List[CalibrationResult], output_file: str, pole_pairs: int):
     """Сохранение результатов в YAML файл"""
     data = {
         'calibration': {
             'timestamp': datetime.now().isoformat(),
             'description': 'Результаты автокалибровки VESC',
+            'pole_pairs': pole_pairs,
+            'note': 'ERPM конвертирован в механический RPM через pole_pairs'
         },
         'wheels': {}
     }
@@ -236,6 +252,8 @@ def save_results(results: List[CalibrationResult], output_file: str):
         
         data['wheels'][f'vesc_{r.vesc_id}'] = {
             'vesc_id': r.vesc_id,
+            'max_erpm_forward': round(r.max_erpm_forward, 1),
+            'max_erpm_backward': round(r.max_erpm_backward, 1),
             'max_rpm_forward': round(r.max_rpm_forward, 1),
             'max_rpm_backward': round(r.max_rpm_backward, 1),
             'max_rps_forward': round(r.max_rps_forward, 2),
@@ -275,6 +293,12 @@ def main():
         help='CAN интерфейс (по умолчанию: can0)'
     )
     parser.add_argument(
+        '--pole-pairs',
+        type=int,
+        default=15,
+        help='Количество пар полюсов мотора (poles/2, по умолчанию: 15)'
+    )
+    parser.add_argument(
         '--output', 
         type=str, 
         default='calibration_results.yaml',
@@ -287,6 +311,7 @@ def main():
     print("="*50)
     print(f"VESC IDs: {args.vesc_ids}")
     print(f"CAN интерфейс: {args.can_interface}")
+    print(f"Пар полюсов: {args.pole_pairs} (конвертирует ERPM → RPM)")
     print(f"Выходной файл: {args.output}")
     print("="*50)
     
@@ -295,7 +320,7 @@ def main():
     print("   и колёса могут свободно вращаться!")
     input("\nНажмите Enter для начала калибровки...")
     
-    calibrator = VescCalibrator(args.can_interface)
+    calibrator = VescCalibrator(args.can_interface, pole_pairs=args.pole_pairs)
     
     if not calibrator.connect():
         sys.exit(1)
@@ -306,7 +331,7 @@ def main():
             result = calibrator.calibrate_wheel(vesc_id)
             results.append(result)
         
-        save_results(results, args.output)
+        save_results(results, args.output, args.pole_pairs)
         
     finally:
         calibrator.disconnect()

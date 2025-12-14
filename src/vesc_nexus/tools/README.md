@@ -16,16 +16,19 @@ pip install python-can pyyaml matplotlib pandas
 
 **Использование:**
 ```bash
-# Калибровка 4 колёс
-python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --can-interface can0
+# Калибровка 4 колёс (30 полюсов = 15 пар полюсов)
+python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --pole-pairs 15
 
-# С указанием выходного файла
-python3 calibrate_max_rpm.py --vesc-ids 49 124 --output my_calibration.yaml
+# С указанием CAN интерфейса и выходного файла
+python3 calibrate_max_rpm.py --vesc-ids 49 124 --pole-pairs 15 --can-interface can0 --output my_calibration.yaml
 ```
+
+**ВАЖНО:** `--pole-pairs` должен быть `количество_полюсов / 2`  
+Например: если у мотора 30 полюсов → `--pole-pairs 15`
 
 **Алгоритм:**
 1. Постепенно увеличивает duty cycle
-2. Отслеживает рост RPM
+2. Отслеживает рост механического RPM (конвертирует ERPM → RPM)
 3. Останавливается когда RPM перестаёт расти (насыщение)
 4. Повторяет для обратного направления
 5. Сохраняет результаты в YAML
@@ -34,14 +37,18 @@ python3 calibrate_max_rpm.py --vesc-ids 49 124 --output my_calibration.yaml
 ```yaml
 calibration:
   timestamp: '2024-01-15T10:30:00'
+  pole_pairs: 15
+  note: 'ERPM конвертирован в механический RPM через pole_pairs'
 wheels:
   vesc_49:
-    max_rpm_forward: 900.0
-    max_rpm_backward: 895.0
-    avg_max_rps: 14.96
+    max_erpm_forward: 10500.0
+    max_erpm_backward: 10450.0
+    max_rpm_forward: 700.0    # ERPM / pole_pairs
+    max_rpm_backward: 696.7
+    avg_max_rps: 11.64        # RPM / 60
 
 config_snippet:
-  wheel_max_rps: [14.96, 15.02, 14.88, 15.10]
+  wheel_max_rps: [11.64, 11.70, 11.58, 11.75]
 ```
 
 ---
@@ -83,7 +90,8 @@ python3 linearity_test.py --vesc-id 49 --both-directions
 2. **Калибровка:**
    ```bash
    cd src/vesc_nexus/tools
-   python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94
+   # Для моторов с 30 полюсами (15 пар полюсов)
+   python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --pole-pairs 15
    ```
 
 3. **Применение результатов:**
