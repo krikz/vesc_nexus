@@ -117,6 +117,16 @@ void VescHandler::sendSpeed(double linear_speed) {
         duty_cycle = clamp(duty_cycle, -1.0, 1.0);
     }
 
+    // Deadzone compensation: если duty ненулевой, применяем минимальный порог
+    // Это нужно потому что VESC не крутит мотор при очень малых duty (мёртвая зона)
+    if (min_duty_ > 0.0 && duty_cycle != 0.0) {
+        double abs_duty = std::abs(duty_cycle);
+        if (abs_duty < min_duty_) {
+            // Применяем минимальный duty с сохранением знака
+            duty_cycle = (duty_cycle > 0) ? min_duty_ : -min_duty_;
+        }
+    }
+
     // Логируем изменения значений
     double speed_delta = std::abs(linear_speed - last_linear_speed_);
     double duty_delta = std::abs(duty_cycle - last_duty_);

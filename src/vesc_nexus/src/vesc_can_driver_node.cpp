@@ -33,6 +33,10 @@ public:
         // Измеряется: подать duty=100%, замерить RPM из телеметрии VESC, разделить на 60
         // Пример: если при duty=100% колесо делает 900 RPM → wheel_max_rps = 15.0
         this->declare_parameter("wheel_max_rps", std::vector<double>{15.0, 15.0, 15.0, 15.0});
+        
+        // Минимальный duty cycle для преодоления мёртвой зоны VESC
+        // Из калибровки: duty=0.05 еле крутится, duty=0.10 нормально
+        this->declare_parameter("min_duty", 0.08);
 
         std::string can_if;
         this->get_parameter("can_interface", can_if);
@@ -51,6 +55,8 @@ public:
         this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
         std::vector<double> wheel_max_rps;
         this->get_parameter("wheel_max_rps", wheel_max_rps);
+        double min_duty;
+        this->get_parameter("min_duty", min_duty);
 
         this->get_parameter("wheel_base", wheel_base_);
 
@@ -102,6 +108,9 @@ public:
             // Установка калибровки: max_rps при duty=100%
             // Используйте tools/calibrate_max_rpm.py для автоматической калибровки
             handler->setMaxRps(wheel_max_rps[i]);
+            
+            // Установка минимального duty для преодоления мёртвой зоны
+            handler->setMinDuty(min_duty);
 
             // Установка отправки CAN
             handler->setSendCanFunc([this](const auto& f) {
