@@ -59,6 +59,12 @@ public:
      */
     double getMaxSpeed() const { return max_speed_mps_; }
 
+    /**
+     * @brief Установить минимальный duty cycle для преодоления мёртвой зоны
+     * @param min_duty Минимальный duty (0.0-1.0), типично 0.05-0.10
+     */
+    void setMinDuty(double min_duty) { min_duty_ = min_duty; }
+
 private:
     uint8_t can_id_;
     std::string label_;
@@ -76,6 +82,7 @@ private:
     // Используйте tools/calibrate_max_rpm.py для измерения
     double max_rps_ = 15.0;           // обороты в секунду при duty=100%
     double max_speed_mps_ = 0.0;      // расчётная макс. скорость (м/с)
+    double min_duty_ = 0.0;           // минимальный duty для преодоления мёртвой зоны
     
     // Для подсчёта частоты отправки команд
     size_t send_speed_count_;

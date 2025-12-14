@@ -27,6 +27,14 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Command timeout configured: %.2f seconds", command_timeout_);
 
+  // Читаем min_duty для преодоления мёртвой зоны VESC (опционально, по умолчанию 0.0)
+  double min_duty = 0.0;
+  if (info.hardware_parameters.find("min_duty") != info.hardware_parameters.end()) {
+    min_duty = std::stod(info.hardware_parameters.at("min_duty"));
+  }
+  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    "Min duty configured: %.3f", min_duty);
+
   // Инициализация CAN
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_);
   if (!can_interface_->open()) {
@@ -54,12 +62,27 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     }
     int poles = std::stoi(joint.parameters.at("poles"));
     int64_t min_erpm = std::stoll(joint.parameters.at("min_erpm"));
+    
+    // Читаем max_rps из параметров joint (калибровка duty → скорость)
+    double max_rps = 15.0;  // По умолчанию 15 об/сек (900 RPM)
+    if (joint.parameters.find("max_rps") != joint.parameters.end()) {
+      max_rps = std::stod(joint.parameters.at("max_rps"));
+    }
 
     auto handler = std::make_shared<VescHandler>(
       can_id, joint.name, radius, poles, min_erpm, CommandLimits{});
     handler->setSendCanFunc([this](const auto& f) {
       return can_interface_->sendFrame(f);
     });
+    
+    // Установка калибровки max_rps и min_duty
+    handler->setMaxRps(max_rps);
+    handler->setMinDuty(min_duty);
+    
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"),
+      "[%s] can_id=%d, max_rps=%.2f, max_speed=%.2f m/s, min_duty=%.3f",
+      joint.name.c_str(), can_id, max_rps, handler->getMaxSpeed(), min_duty);
+    
     vesc_handlers_.push_back(handler);
 
     // Инициализация буферов
