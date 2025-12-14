@@ -18,7 +18,7 @@
     #
     # АВТОКАЛИБРОВКА (рекомендуется):
     #   cd src/vesc_nexus/tools
-    #   python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94
+    #   python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --pole-pairs 15
     #
     # ТЕСТ ЛИНЕЙНОСТИ (опционально):
     #   python3 linearity_test.py --vesc-id 49 --both-directions
@@ -29,10 +29,12 @@
     # - Формула: duty = target_speed / max_speed
     #   где max_speed = 2π × wheel_max_rps × wheel_radius
     #
-    # ПРИМЕР:
-    # Если при duty=100% VESC показывает 900 RPM:
-    #   wheel_max_rps = 900 / 60 = 15.0 об/сек
-    #   max_speed = 2π × 15.0 × 0.115 = 10.84 м/с
-    #   Для скорости 1 м/с → duty = 1.0 / 10.84 ≈ 9.2%
+    # ПРИМЕР РАСЧЁТА:
+    # При калибровке получено:
+    #   VESC ID 49:  10628 ERPM = 709 RPM = 11.81 об/сек (при 30 полюсах, 15 пар)
+    #   wheel_radius = 0.115 м
+    #   max_speed = 2π × 11.81 × 0.115 = 8.53 м/с
+    #   Для скорости 1 м/с → duty = 1.0 / 8.53 ≈ 11.7%
     #
-    wheel_max_rps: [15.0, 15.0, 15.0, 15.0]  # об/сек при duty=100% (запустите calibrate_max_rpm.py!)
+    # КАЛИБРОВАННЫЕ ЗНАЧЕНИЯ (результат calibrate_max_rpm.py):
+    wheel_max_rps: [11.83, 11.93, 11.70, 11.53]  # об/сек при duty=100% (механический RPM)

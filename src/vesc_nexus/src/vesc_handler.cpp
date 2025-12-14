@@ -48,6 +48,9 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
     switch (command_id) {
         case vesc_nexus::CAN_PACKET_STATUS:
             vesc_nexus::parseStatusPacket(frame, last_state_);
+            // Конвертируем ERPM → механический RPM
+            // parseStatusPacket сохраняет ERPM в speed_rpm, нужно разделить на pole_pairs
+            last_state_.speed_rpm = last_state_.speed_rpm / pole_pairs_;
             break;
         case vesc_nexus::CAN_PACKET_STATUS_2:
             vesc_nexus::parseStatus2Packet(frame, last_state_);
