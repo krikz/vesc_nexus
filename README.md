@@ -183,18 +183,22 @@ cd src/vesc_nexus/tools
 # Установка зависимостей
 pip install python-can pyyaml matplotlib
 
-# Автокалибровка всех колёс
-python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --can-interface can0
+# Автокалибровка всех колёс (для моторов с 30 полюсами)
+python3 calibrate_max_rpm.py --vesc-ids 49 124 81 94 --pole-pairs 15
 
 # Тест линейности (опционально)
 python3 linearity_test.py --vesc-id 49 --both-directions
 ```
 
+**ВАЖНО:** `--pole-pairs` = количество_полюсов / 2  
+Например: 30 полюсов → `--pole-pairs 15`
+
 Скрипт `calibrate_max_rpm.py`:
 1. Автоматически разгоняет каждое колесо
 2. Определяет точку насыщения (когда RPM перестаёт расти)
-3. Замеряет обороты в обоих направлениях
-4. Сохраняет результаты в YAML файл
+3. Конвертирует ERPM → механический RPM через pole_pairs
+4. Замеряет обороты в обоих направлениях
+5. Сохраняет результаты в YAML файл
 
 ### Принцип работы
 
