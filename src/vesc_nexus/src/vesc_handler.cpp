@@ -46,12 +46,27 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
     if (sender_id != can_id_) return;
 
     switch (command_id) {
-        case vesc_nexus::CAN_PACKET_STATUS:
+        case vesc_nexus::CAN_PACKET_STATUS: {
             vesc_nexus::parseStatusPacket(frame, last_state_);
+            // Сохраняем raw ERPM для логирования
+            double raw_erpm = last_state_.speed_rpm;
             // Конвертируем ERPM → механический RPM
-            // parseStatusPacket сохраняет ERPM в speed_rpm, нужно разделить на pole_pairs
             last_state_.speed_rpm = last_state_.speed_rpm / pole_pairs_;
+            
+            // DEBUG: логируем ERPM → RPM конвертацию (раз в секунду)
+            static auto last_log = std::chrono::steady_clock::now();
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log).count() > 1000) {
+                if (std::abs(raw_erpm) > 10) {  // Только если есть движение
+                    RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
+                        "[%s] RAW_ERPM=%.1f, pole_pairs=%d, mech_RPM=%.2f, tach=%d, tach_abs=%d",
+                        label_.c_str(), raw_erpm, pole_pairs_, last_state_.speed_rpm,
+                        last_state_.tachometer, last_state_.tachometer_abs);
+                    last_log = now;
+                }
+            }
             break;
+        }
         case vesc_nexus::CAN_PACKET_STATUS_2:
             vesc_nexus::parseStatus2Packet(frame, last_state_);
             break;
