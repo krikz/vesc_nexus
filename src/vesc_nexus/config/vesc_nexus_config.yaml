@@ -4,7 +4,7 @@
     can_baudrate: 500000
     vesc_ids: [49, 124, 81, 94]
     wheel_labels: ["front_left", "front_right", "rear_left", "rear_right"]
-    wheel_radii: [0.115, 0.115, 0.115, 0.115]       # радиус в метрах
+    wheel_radii: [0.138, 0.138, 0.138, 0.138]       # калибровочный: 0.115 × 1.2
     wheel_poles: [30, 30, 30, 30]                  # количество полюсов (магнитов)
     wheel_abs_min_erpm: [20, 20, 20, 20]           # минимальный ERPM для движения (~0.016 m/s)
     wheel_base: 0.3                                # расстояние между передней и задней осью (м)

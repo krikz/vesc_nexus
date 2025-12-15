@@ -43,7 +43,7 @@ private:
 
   std::string can_interface_name_;
   double publish_rate_ = 50.0;
-  double wheel_radius_ = 0.115;
+  double wheel_radius_ = 0.138;  // Калибровочный: 0.115 × 1.2
   
   // Timeout mechanism for motor relaxation
   std::vector<rclcpp::Time> last_nonzero_cmd_time_;
