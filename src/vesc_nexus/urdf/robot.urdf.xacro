@@ -4,7 +4,7 @@
       <plugin>vesc_nexus/VescSystemHardwareInterface</plugin>
       <param name="can_interface">can0</param>
       <param name="publish_rate">50.0</param>
-      <param name="wheel_radius">0.115</param>
+      <param name="wheel_radius">0.138</param>
     </hardware>
 
     <joint name="left_front_wheel" type="continuous">
@@ -14,7 +14,7 @@
       <param name="can_id">49</param>
       <param name="poles">30</param>
       <param name="min_erpm">24</param>
-      <param name="wheel_radius">0.115</param>
+      <param name="wheel_radius">0.138</param>
     </joint>
 
     <joint name="right_front_wheel" type="continuous">
@@ -24,7 +24,7 @@
       <param name="can_id">124</param>
       <param name="poles">30</param>
       <param name="min_erpm">24</param>
-      <param name="wheel_radius">0.115</param>
+      <param name="wheel_radius">0.138</param>
     </joint>
 
     <joint name="left_rear_wheel" type="continuous">
@@ -34,7 +34,7 @@
       <param name="can_id">81</param>
       <param name="poles">30</param>
       <param name="min_erpm">24</param>
-      <param name="wheel_radius">0.115</param>
+      <param name="wheel_radius">0.138</param>
     </joint>
 
     <joint name="right_rear_wheel" type="continuous">
@@ -44,7 +44,7 @@
       <param name="can_id">94</param>
       <param name="poles">30</param>
       <param name="min_erpm">24</param>
-      <param name="wheel_radius">0.115</param>
+      <param name="wheel_radius">0.138</param>
     </joint>
   </ros2_control>
 </robot>
