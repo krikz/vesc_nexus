@@ -53,15 +53,29 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
             // Конвертируем ERPM → механический RPM
             last_state_.speed_rpm = last_state_.speed_rpm / pole_pairs_;
             
+            // Конвертируем RPM → rad/s
+            velocity_rad_s_ = last_state_.speed_rpm * (2.0 * M_PI / 60.0);
+            
+            // Накапливаем позицию по РЕАЛЬНОМУ интервалу между CAN пакетами
+            auto now = std::chrono::steady_clock::now();
+            if (first_status_received_) {
+                double dt = std::chrono::duration<double>(now - last_status_time_).count();
+                // Защита от слишком больших dt (например, после паузы)
+                if (dt > 0.0 && dt < 0.5) {
+                    accumulated_position_rad_ += velocity_rad_s_ * dt;
+                }
+            }
+            last_status_time_ = now;
+            first_status_received_ = true;
+            
             // DEBUG: логируем ERPM → RPM конвертацию (раз в секунду)
             static auto last_log = std::chrono::steady_clock::now();
-            auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log).count() > 1000) {
                 if (std::abs(raw_erpm) > 10) {  // Только если есть движение
                     RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
-                        "[%s] RAW_ERPM=%.1f, pole_pairs=%d, mech_RPM=%.2f, tach=%d, tach_abs=%d",
-                        label_.c_str(), raw_erpm, pole_pairs_, last_state_.speed_rpm,
-                        last_state_.tachometer, last_state_.tachometer_abs);
+                        "[%s] ERPM=%.0f, RPM=%.1f, vel=%.2f rad/s, pos=%.2f rad",
+                        label_.c_str(), raw_erpm, last_state_.speed_rpm, 
+                        velocity_rad_s_, accumulated_position_rad_);
                     last_log = now;
                 }
             }
