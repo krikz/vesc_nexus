@@ -65,6 +65,17 @@ public:
      */
     void setMinDuty(double min_duty) { min_duty_ = min_duty; }
 
+    /**
+     * @brief Получить накопленную позицию колеса (rad)
+     * Интегрируется по реальным интервалам между CAN пакетами
+     */
+    double getAccumulatedPosition() const { return accumulated_position_rad_; }
+
+    /**
+     * @brief Получить текущую угловую скорость (rad/s)
+     */
+    double getVelocityRadPerSec() const { return velocity_rad_s_; }
+
 private:
     uint8_t can_id_;
     std::string label_;
@@ -91,6 +102,12 @@ private:
     // Для отслеживания изменений значений
     double last_linear_speed_;
     double last_duty_;
+    
+    // Накопление позиции по реальным интервалам CAN пакетов
+    std::chrono::steady_clock::time_point last_status_time_;
+    double accumulated_position_rad_ = 0.0;
+    double velocity_rad_s_ = 0.0;
+    bool first_status_received_ = false;
     
     // Вспомогательные функции
     void updateMaxSpeed();

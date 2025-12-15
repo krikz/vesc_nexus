@@ -162,7 +162,7 @@ std::vector<hardware_interface::CommandInterface> VescSystemHardwareInterface::e
 }
 
 hardware_interface::return_type VescSystemHardwareInterface::read(
-  const rclcpp::Time& /*time*/, const rclcpp::Duration& period) {
+  const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
   
   static int debug_counter = 0;
   bool should_log = (debug_counter++ % 100 == 0);  // Логируем каждые 100 вызовов (~2 сек)
@@ -170,19 +170,18 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
     const auto& state = vesc_handlers_[i]->getLastState();
     
-    // speed_rpm уже содержит МЕХАНИЧЕСКИЕ RPM (конвертация ERPM→RPM сделана в VescHandler)
-    double rpm_mechanical = state.speed_rpm;
-    
-    hw_velocities_[i] = rpm_mechanical * (2.0 * M_PI / 60.0);  // Механические RPM → rad/s
-    hw_positions_[i] += hw_velocities_[i] * period.seconds();  // Используем реальный period
+    // Используем velocity и position напрямую из VescHandler
+    // (накопление с реальными интервалами между CAN пакетами)
+    hw_velocities_[i] = vesc_handlers_[i]->getVelocityRadPerSec();
+    hw_positions_[i] = vesc_handlers_[i]->getAccumulatedPosition();
     hw_efforts_[i] = state.current_motor;
     
     // Debug: логируем данные от первого колеса
-    if (should_log && i == 0 && std::abs(rpm_mechanical) > 1.0) {
+    if (should_log && i == 0 && std::abs(hw_velocities_[i]) > 0.1) {
       RCLCPP_INFO(rclcpp::get_logger("VescHW_DEBUG"),
-        "[%s] RPM=%.1f, vel_rad_s=%.3f, pos_rad=%.3f, period=%.4f",
+        "[%s] vel_rad_s=%.3f, pos_rad=%.3f",
         vesc_handlers_[i]->getLabel().c_str(),
-        rpm_mechanical, hw_velocities_[i], hw_positions_[i], period.seconds());
+        hw_velocities_[i], hw_positions_[i]);
     }
   }
   
