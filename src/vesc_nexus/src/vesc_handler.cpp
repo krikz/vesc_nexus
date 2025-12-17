@@ -118,6 +118,48 @@ void VescHandler::sendCurrent(double current) {
     }
 }
 
+double VescHandler::calculatePwmDuty(double target_duty) {
+    // Если PWM модуляция отключена или duty >= min_duty - возвращаем как есть
+    if (!pwm_modulation_enabled_ || std::abs(target_duty) >= min_duty_ || target_duty == 0.0) {
+        return target_duty;
+    }
+
+    // Вычисляем процент HIGH в PWM цикле на основе target_duty
+    // target_duty в диапазоне [0, min_duty) нужно отобразить в [0%, 100%]
+    double abs_target = std::abs(target_duty);
+    double duty_high_percentage = abs_target / min_duty_;  // 0.0 до 1.0
+    
+    // Вычисляем количество импульсов HIGH на цикл (50 импульсов при 50 Hz)
+    size_t impulses_per_cycle = static_cast<size_t>(pwm_frequency_hz_);
+    size_t high_count = static_cast<size_t>(duty_high_percentage * impulses_per_cycle);
+    
+    // Равномерно распределяем HIGH импульсы
+    // Используем паттерн: каждые (impulses_per_cycle / high_count) импульсов ставим HIGH
+    bool should_be_high = false;
+    if (high_count > 0) {
+        size_t pattern_period = impulses_per_cycle / high_count;
+        size_t position_in_cycle = pwm_cycle_counter_ % impulses_per_cycle;
+        
+        // Равномерное распределение: HIGH на позициях 0, period, 2*period, ...
+        for (size_t i = 0; i < high_count; ++i) {
+            if (position_in_cycle == (i * pattern_period)) {
+                should_be_high = true;
+                break;
+            }
+        }
+    }
+    
+    // Увеличиваем счётчик для следующего вызова
+    pwm_cycle_counter_++;
+    if (pwm_cycle_counter_ >= impulses_per_cycle) {
+        pwm_cycle_counter_ = 0;
+    }
+    
+    // Возвращаем LOW или HIGH с учётом знака
+    double pwm_duty = should_be_high ? pwm_duty_high_ : pwm_duty_low_;
+    return (target_duty > 0) ? pwm_duty : -pwm_duty;
+}
+
 void VescHandler::sendSpeed(double linear_speed) {
     if (!send_can_func_) return;
 
@@ -140,20 +182,32 @@ void VescHandler::sendSpeed(double linear_speed) {
     // Конвертируем линейную скорость (м/с) в duty cycle
     // Формула: duty = target_speed / max_speed
     // где max_speed = 2π × max_rps × wheel_radius (расчитано в updateMaxSpeed)
-    double duty_cycle = 0.0;
+    double target_duty = 0.0;
     if (max_speed_mps_ > 0.0) {
-        duty_cycle = linear_speed / max_speed_mps_;
-        duty_cycle = clamp(duty_cycle, -1.0, 1.0);
+        target_duty = linear_speed / max_speed_mps_;
+        target_duty = clamp(target_duty, -1.0, 1.0);
     }
 
-    // Deadzone compensation: масштабируем duty из [0,1] в [min_duty, 1]
-    // Это нужно потому что VESC не крутит мотор при очень малых duty (мёртвая зона)
-    // При duty=0 остаётся 0, при duty=0.01 становится ~min_duty, при duty=1 остаётся 1
-    if (min_duty_ > 0.0 && duty_cycle != 0.0) {
-        double abs_duty = std::abs(duty_cycle);
+    // Выбираем стратегию управления:
+    // 1. Если PWM включён и |target_duty| < min_duty - используем PWM модуляцию
+    // 2. Иначе - используем стандартную deadzone compensation
+    double duty_cycle = 0.0;
+    bool using_pwm = false;
+
+    if (pwm_modulation_enabled_ && target_duty != 0.0 && std::abs(target_duty) < min_duty_) {
+        // PWM модуляция для ультра-низких скоростей
+        duty_cycle = calculatePwmDuty(target_duty);
+        using_pwm = true;
+    } else if (min_duty_ > 0.0 && target_duty != 0.0) {
+        // Deadzone compensation: масштабируем duty из [0,1] в [min_duty, 1]
+        // Это нужно потому что VESC не крутит мотор при очень малых duty (мёртвая зона)
+        // При duty=0 остаётся 0, при duty=0.01 становится ~min_duty, при duty=1 остаётся 1
+        double abs_duty = std::abs(target_duty);
         // Масштабируем: real_duty = min_duty + abs_duty * (1 - min_duty)
         double scaled_duty = min_duty_ + abs_duty * (1.0 - min_duty_);
-        duty_cycle = (duty_cycle > 0) ? scaled_duty : -scaled_duty;
+        duty_cycle = (target_duty > 0) ? scaled_duty : -scaled_duty;
+    } else {
+        duty_cycle = target_duty;
     }
 
     // Логируем изменения значений
@@ -161,10 +215,16 @@ void VescHandler::sendSpeed(double linear_speed) {
     double duty_delta = std::abs(duty_cycle - last_duty_);
     
     if (speed_delta > 0.001 || duty_delta > 0.001) {  // Логируем только значимые изменения
-        RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                    "[%s] speed=%.4f m/s → duty=%.4f (Δspeed=%.4f, Δduty=%.4f)",
-                    label_.c_str(), linear_speed, duty_cycle, 
-                    speed_delta, duty_delta);
+        if (using_pwm) {
+            RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                        "[%s] speed=%.4f m/s → duty=%.4f [PWM: target=%.4f, cycle=%zu]",
+                        label_.c_str(), linear_speed, duty_cycle, target_duty, pwm_cycle_counter_);
+        } else {
+            RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                        "[%s] speed=%.4f m/s → duty=%.4f (Δspeed=%.4f, Δduty=%.4f)",
+                        label_.c_str(), linear_speed, duty_cycle, 
+                        speed_delta, duty_delta);
+        }
     }
     
     last_linear_speed_ = linear_speed;
