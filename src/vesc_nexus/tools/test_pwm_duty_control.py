@@ -24,7 +24,7 @@
     Например: если у мотора 30 полюсов, то --pole-pairs 15
 
 ТРЕБОВАНИЯ:
-    pip install python-can pyyaml
+    pip install python-can
 """
 
 import argparse
@@ -253,6 +253,31 @@ class VescPWMTester:
             average_current=round(avg_current, 2),
             timestamp=datetime.now().isoformat()
         )
+    
+    def print_results(self, results: List[ExperimentResult]):
+        """Вывести результаты в консоль"""
+        print("\n" + "="*80)
+        print("РЕЗУЛЬТАТЫ ТЕСТИРОВАНИЯ ШИМ УПРАВЛЕНИЯ")
+        print("="*80)
+        print(f"VESC ID: {self.vesc_id} | Пары полюсов: {self.pole_pairs}")
+        print(f"Duty LOW: {DUTY_LOW} | Duty HIGH: {DUTY_HIGH}")
+        print(f"Частота: {UPDATE_RATE_HZ} Гц | Длительность: {EXPERIMENT_DURATION} сек")
+        print("="*80)
+        print(f"{'№':<4} {'HIGH%':<8} {'RPM ср':<12} {'RPM мин':<12} {'RPM макс':<12} {'RPM σ':<10} {'Ток':<8}")
+        print("-"*80)
+        
+        for r in results:
+            print(f"{r.experiment_number:<4} "
+                  f"{r.duty_high_percentage:<8} "
+                  f"{r.average_rpm:<12.1f} "
+                  f"{r.min_rpm:<12.1f} "
+                  f"{r.max_rpm:<12.1f} "
+                  f"{r.std_rpm:<10.1f} "
+                  f"{r.average_current:<8.2f}")
+        
+        print("="*80)
+        print(f"Всего экспериментов: {len(results)}")
+        print("="*80 + "\n")
     
     def run_all_experiments(self) -> List[ExperimentResult]:
         """Запуск всех 10 экспериментов"""
