@@ -49,7 +49,7 @@ SETTLE_TIME = 1.0                      # Время разгона перед н
 MEASUREMENTS_PER_EXPERIMENT = int(EXPERIMENT_DURATION * UPDATE_RATE_HZ)  # 250 итераций
 
 # Duty cycle значения
-DUTY_LOW = 0.05   # Низкий duty cycle
+DUTY_LOW = 0.01   # Низкий duty cycle (очень низкая скорость)
 DUTY_HIGH = 0.1   # Высокий duty cycle
 
 
