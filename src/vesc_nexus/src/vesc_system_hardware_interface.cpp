@@ -35,6 +35,39 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Min duty configured: %.3f", min_duty);
 
+  // Читаем параметры PWM модуляции для ультра-низких скоростей
+  bool pwm_enabled = false;
+  if (info.hardware_parameters.find("pwm_modulation_enabled") != info.hardware_parameters.end()) {
+    std::string pwm_str = info.hardware_parameters.at("pwm_modulation_enabled");
+    pwm_enabled = (pwm_str == "true" || pwm_str == "True" || pwm_str == "1");
+  }
+  
+  double pwm_duty_low = 0.01;
+  if (info.hardware_parameters.find("pwm_duty_low") != info.hardware_parameters.end()) {
+    pwm_duty_low = std::stod(info.hardware_parameters.at("pwm_duty_low"));
+  }
+  
+  double pwm_duty_high = 0.1;
+  if (info.hardware_parameters.find("pwm_duty_high") != info.hardware_parameters.end()) {
+    pwm_duty_high = std::stod(info.hardware_parameters.at("pwm_duty_high"));
+  }
+  
+  double pwm_frequency = 50.0;
+  if (info.hardware_parameters.find("pwm_frequency") != info.hardware_parameters.end()) {
+    pwm_frequency = std::stod(info.hardware_parameters.at("pwm_frequency"));
+  }
+
+  if (pwm_enabled) {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "PWM Modulation: ENABLED | duty_low=%.3f, duty_high=%.3f, frequency=%.1f Hz",
+      pwm_duty_low, pwm_duty_high, pwm_frequency);
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "PWM will be used for speeds requiring duty < %.3f (min_duty)", min_duty);
+  } else {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "PWM Modulation: DISABLED");
+  }
+
   // Инициализация CAN
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_);
   if (!can_interface_->open()) {
@@ -79,9 +112,14 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     handler->setMaxRps(max_rps);
     handler->setMinDuty(min_duty);
     
+    // Настройка PWM модуляции для ультра-низких скоростей
+    handler->setPwmModulationEnabled(pwm_enabled);
+    handler->setPwmModulationParams(pwm_duty_low, pwm_duty_high, pwm_frequency);
+    
     RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"),
-      "[%s] can_id=%d, max_rps=%.2f, max_speed=%.2f m/s, min_duty=%.3f",
-      joint.name.c_str(), can_id, max_rps, handler->getMaxSpeed(), min_duty);
+      "[%s] can_id=%d, max_rps=%.2f, max_speed=%.2f m/s, min_duty=%.3f, pwm=%s",
+      joint.name.c_str(), can_id, max_rps, handler->getMaxSpeed(), min_duty,
+      pwm_enabled ? "ON" : "OFF");
     
     vesc_handlers_.push_back(handler);
 
