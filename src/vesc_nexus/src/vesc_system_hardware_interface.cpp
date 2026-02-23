@@ -27,6 +27,47 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Command timeout configured: %.2f seconds", command_timeout_);
 
+  // Читаем min_duty для преодоления мёртвой зоны VESC (опционально, по умолчанию 0.0)
+  double min_duty = 0.0;
+  if (info.hardware_parameters.find("min_duty") != info.hardware_parameters.end()) {
+    min_duty = std::stod(info.hardware_parameters.at("min_duty"));
+  }
+  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    "Min duty configured: %.3f", min_duty);
+
+  // Читаем параметры PWM модуляции для ультра-низких скоростей
+  bool pwm_enabled = false;
+  if (info.hardware_parameters.find("pwm_modulation_enabled") != info.hardware_parameters.end()) {
+    std::string pwm_str = info.hardware_parameters.at("pwm_modulation_enabled");
+    pwm_enabled = (pwm_str == "true" || pwm_str == "True" || pwm_str == "1");
+  }
+  
+  double pwm_duty_low = 0.01;
+  if (info.hardware_parameters.find("pwm_duty_low") != info.hardware_parameters.end()) {
+    pwm_duty_low = std::stod(info.hardware_parameters.at("pwm_duty_low"));
+  }
+  
+  double pwm_duty_high = 0.1;
+  if (info.hardware_parameters.find("pwm_duty_high") != info.hardware_parameters.end()) {
+    pwm_duty_high = std::stod(info.hardware_parameters.at("pwm_duty_high"));
+  }
+  
+  double pwm_frequency = 50.0;
+  if (info.hardware_parameters.find("pwm_frequency") != info.hardware_parameters.end()) {
+    pwm_frequency = std::stod(info.hardware_parameters.at("pwm_frequency"));
+  }
+
+  if (pwm_enabled) {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "PWM Modulation: ENABLED | duty_low=%.3f, duty_high=%.3f, frequency=%.1f Hz",
+      pwm_duty_low, pwm_duty_high, pwm_frequency);
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "PWM will be used for speeds requiring duty < %.3f (min_duty)", min_duty);
+  } else {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "PWM Modulation: DISABLED");
+  }
+
   // Инициализация CAN
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_);
   if (!can_interface_->open()) {
@@ -54,12 +95,32 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     }
     int poles = std::stoi(joint.parameters.at("poles"));
     int64_t min_erpm = std::stoll(joint.parameters.at("min_erpm"));
+    
+    // Читаем max_rps из параметров joint (калибровка duty → скорость)
+    double max_rps = 15.0;  // По умолчанию 15 об/сек (900 RPM)
+    if (joint.parameters.find("max_rps") != joint.parameters.end()) {
+      max_rps = std::stod(joint.parameters.at("max_rps"));
+    }
 
     auto handler = std::make_shared<VescHandler>(
       can_id, joint.name, radius, poles, min_erpm, CommandLimits{});
     handler->setSendCanFunc([this](const auto& f) {
       return can_interface_->sendFrame(f);
     });
+    
+    // Установка калибровки max_rps и min_duty
+    handler->setMaxRps(max_rps);
+    handler->setMinDuty(min_duty);
+    
+    // Настройка PWM модуляции для ультра-низких скоростей
+    handler->setPwmModulationEnabled(pwm_enabled);
+    handler->setPwmModulationParams(pwm_duty_low, pwm_duty_high, pwm_frequency);
+    
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"),
+      "[%s] can_id=%d, max_rps=%.2f, max_speed=%.2f m/s, min_duty=%.3f, pwm=%s",
+      joint.name.c_str(), can_id, max_rps, handler->getMaxSpeed(), min_duty,
+      pwm_enabled ? "ON" : "OFF");
+    
     vesc_handlers_.push_back(handler);
 
     // Инициализация буферов
@@ -140,27 +201,26 @@ std::vector<hardware_interface::CommandInterface> VescSystemHardwareInterface::e
 
 hardware_interface::return_type VescSystemHardwareInterface::read(
   const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
+  
+  static int debug_counter = 0;
+  bool should_log = (debug_counter++ % 100 == 0);  // Логируем каждые 100 вызовов (~2 сек)
+  
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
     const auto& state = vesc_handlers_[i]->getLastState();
-    double erpm = state.speed_rpm;  // Это ERPM (электрические обороты), а не механические!
     
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Конвертируем ERPM в механические RPM
-    // ERPM = Механические_RPM × Количество_пар_полюсов
-    int pole_pairs = vesc_handlers_[i]->getPolePairs();
+    // Используем velocity и position напрямую из VescHandler
+    // (накопление с реальными интервалами между CAN пакетами)
+    hw_velocities_[i] = vesc_handlers_[i]->getVelocityRadPerSec();
+    hw_positions_[i] = vesc_handlers_[i]->getAccumulatedPosition();
+    hw_efforts_[i] = state.current_motor;
     
-    // Защита от деления на ноль
-    if (pole_pairs <= 0) {
-      RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescSystemHardwareInterface"),
-        "Invalid pole_pairs (%d) for handler %zu. Skipping velocity calculation.", pole_pairs, i);
-      hw_velocities_[i] = 0.0;
-      continue;
+    // Debug: логируем данные от первого колеса
+    if (should_log && i == 0 && std::abs(hw_velocities_[i]) > 0.1) {
+      RCLCPP_INFO(rclcpp::get_logger("VescHW_DEBUG"),
+        "[%s] vel_rad_s=%.3f, pos_rad=%.3f",
+        vesc_handlers_[i]->getLabel().c_str(),
+        hw_velocities_[i], hw_positions_[i]);
     }
-    
-    double rpm_mechanical = 2 * erpm / static_cast<double>(pole_pairs);  // ERPM → механические RPM
-    
-    hw_velocities_[i] = rpm_mechanical * (2.0 * M_PI / 60.0);  // Механические RPM → rad/s
-    hw_positions_[i] += hw_velocities_[i] * (1.0 / publish_rate_);
-    hw_efforts_[i] = state.current_motor;  // Пример: ток как "усилие"
   }
   
   // Aggregate battery voltage: minimum excluding zeros (user requirement)

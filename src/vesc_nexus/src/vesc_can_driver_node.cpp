@@ -28,6 +28,25 @@ public:
         this->declare_parameter("wheel_poles", std::vector<int64_t>{30, 30, 30, 30});
         this->declare_parameter("wheel_abs_min_erpm", std::vector<int64_t>{900, 900, 900, 900});
         this->declare_parameter("wheel_base", 0.3);
+        
+        // КАЛИБРОВКА: максимальные обороты в секунду при duty = 100%
+        // Измеряется: подать duty=100%, замерить RPM из телеметрии VESC, разделить на 60
+        // Пример: если при duty=100% колесо делает 900 RPM → wheel_max_rps = 15.0
+        this->declare_parameter("wheel_max_rps", std::vector<double>{15.0, 15.0, 15.0, 15.0});
+        
+        // Минимальный duty cycle для преодоления мёртвой зоны VESC
+        // Из калибровки: duty=0.05 еле крутится, duty=0.10 нормально
+        this->declare_parameter("min_duty", 0.08);
+
+        // PWM модуляция для ультра-низких скоростей (ниже min_duty)
+        // Включить: true для использования PWM при скоростях требующих duty < min_duty
+        this->declare_parameter("pwm_modulation_enabled", false);
+        // Низкий duty для PWM (типично 0.01-0.03)
+        this->declare_parameter("pwm_duty_low", 0.01);
+        // Высокий duty для PWM (типично равен min_duty, например 0.08-0.10)
+        this->declare_parameter("pwm_duty_high", 0.1);
+        // Частота PWM модуляции в Гц (рекомендуется 50 Hz)
+        this->declare_parameter("pwm_frequency", 50.0);
 
         std::string can_if;
         this->get_parameter("can_interface", can_if);
@@ -44,6 +63,20 @@ public:
         this->get_parameter("wheel_poles", wheel_poles);
         std::vector<int64_t> wheel_min_erpm;
         this->get_parameter("wheel_abs_min_erpm", wheel_min_erpm);
+        std::vector<double> wheel_max_rps;
+        this->get_parameter("wheel_max_rps", wheel_max_rps);
+        double min_duty;
+        this->get_parameter("min_duty", min_duty);
+
+        // PWM параметры
+        bool pwm_enabled;
+        this->get_parameter("pwm_modulation_enabled", pwm_enabled);
+        double pwm_duty_low;
+        this->get_parameter("pwm_duty_low", pwm_duty_low);
+        double pwm_duty_high;
+        this->get_parameter("pwm_duty_high", pwm_duty_high);
+        double pwm_frequency;
+        this->get_parameter("pwm_frequency", pwm_frequency);
 
         this->get_parameter("wheel_base", wheel_base_);
 
@@ -54,6 +87,15 @@ public:
             RCLCPP_FATAL(this->get_logger(), "Mismatch in configuration array sizes!");
             rclcpp::shutdown();
             return;
+        }
+        
+        // Дополняем wheel_max_rps если нужно
+        constexpr double DEFAULT_MAX_RPS = 15.0;  // 15 об/сек по умолчанию (900 RPM)
+        if (wheel_max_rps.size() < vesc_ids.size()) {
+            double default_rps = wheel_max_rps.empty() ? DEFAULT_MAX_RPS : wheel_max_rps.back();
+            while (wheel_max_rps.size() < vesc_ids.size()) {
+                wheel_max_rps.push_back(default_rps);
+            }
         }
 
         // Инициализация CAN
@@ -71,7 +113,6 @@ public:
 
         // Параметры
         vesc_nexus::CommandLimits limits;
-        // ... загрузи limits ...
 
         // Создание обработчиков
         for (size_t i = 0; i < vesc_ids.size(); ++i) {
@@ -83,6 +124,17 @@ public:
                 wheel_min_erpm[i],
                 limits
             );
+
+            // Установка калибровки: max_rps при duty=100%
+            // Используйте tools/calibrate_max_rpm.py для автоматической калибровки
+            handler->setMaxRps(wheel_max_rps[i]);
+            
+            // Установка минимального duty для преодоления мёртвой зоны
+            handler->setMinDuty(min_duty);
+
+            // Настройка PWM модуляции для ультра-низких скоростей
+            handler->setPwmModulationEnabled(pwm_enabled);
+            handler->setPwmModulationParams(pwm_duty_low, pwm_duty_high, pwm_frequency);
 
             // Установка отправки CAN
             handler->setSendCanFunc([this](const auto& f) {
@@ -105,6 +157,18 @@ public:
             vesc_handlers_.push_back(handler);
             vesc_ptrs_.push_back(handler.get());
             RCLCPP_INFO(this->get_logger(), "VESC %d (%s) initialized", static_cast<int>(vesc_ids[i]), labels[i].c_str());
+        }
+
+        // Логирование конфигурации PWM модуляции
+        if (pwm_enabled) {
+            RCLCPP_INFO(this->get_logger(), 
+                "PWM Modulation: ENABLED | duty_low=%.3f, duty_high=%.3f, frequency=%.1f Hz",
+                pwm_duty_low, pwm_duty_high, pwm_frequency);
+            RCLCPP_INFO(this->get_logger(), 
+                "PWM will be used for speeds requiring duty < %.3f (min_duty)",
+                min_duty);
+        } else {
+            RCLCPP_INFO(this->get_logger(), "PWM Modulation: DISABLED");
         }
 
         // Паблишеры для состояний
