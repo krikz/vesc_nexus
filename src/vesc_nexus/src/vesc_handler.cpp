@@ -22,8 +22,9 @@ VescHandler::VescHandler(uint8_t can_id, const std::string& label,
 }
 
 void VescHandler::updateMaxSpeed() {
-    // max_speed = 2π × max_rps × wheel_radius
-    max_speed_mps_ = 2.0 * M_PI * max_rps_ * wheel_radius_;
+    // max_wheel_speed = 2π × (max_motor_rps / gear_ratio) × wheel_radius
+    double wheel_rps = max_rps_ / gear_ratio_;
+    max_speed_mps_ = 2.0 * M_PI * wheel_rps * wheel_radius_;
 }
 
 double VescHandler::clamp(double value, double lo, double hi) const {
@@ -211,6 +212,14 @@ double VescHandler::getWheelRadius() const {
 
 int VescHandler::getPolePairs() const {
     return pole_pairs_;
+}
+
+void VescHandler::setGearRatio(double gear_ratio) {
+    gear_ratio_ = (gear_ratio > 0.0) ? gear_ratio : 1.0;
+    updateMaxSpeed();
+    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                "[%s] Gear ratio: %.1f → wheel_rps=%.2f, max_speed=%.2f м/с",
+                label_.c_str(), gear_ratio_, max_rps_ / gear_ratio_, max_speed_mps_);
 }
 
 void VescHandler::setMaxRps(double max_rps) {

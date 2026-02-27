@@ -50,7 +50,14 @@ public:
     void setMaxRps(double max_rps);
 
     /**
-     * @brief Получить максимальные обороты в секунду
+     * @brief Установить передаточное число редуктора
+     * @param gear_ratio Передаточное число (>1 = понижение оборотов)
+     * wheel_rps = motor_rps / gear_ratio
+     */
+    void setGearRatio(double gear_ratio);
+
+    /**
+     * @brief Получить максимальные обороты в секунду (мотора)
      */
     double getMaxRps() const { return max_rps_; }
 
@@ -91,8 +98,9 @@ private:
     
     // Калибровка: максимальные обороты при duty=100%
     // Используйте tools/calibrate_max_rpm.py для измерения
-    double max_rps_ = 15.0;           // обороты в секунду при duty=100%
-    double max_speed_mps_ = 0.0;      // расчётная макс. скорость (м/с)
+    double max_rps_ = 15.0;           // обороты мотора в секунду при duty=100%
+    double gear_ratio_ = 1.0;         // передаточное число редуктора (wheel_rps = motor_rps / gear_ratio)
+    double max_speed_mps_ = 0.0;      // расчётная макс. скорость колеса (м/с)
     double min_duty_ = 0.0;           // минимальный duty для преодоления мёртвой зоны
     
     // Для подсчёта частоты отправки команд

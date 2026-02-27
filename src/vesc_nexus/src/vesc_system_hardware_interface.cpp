@@ -35,6 +35,14 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Min duty configured: %.3f", min_duty);
 
+  // Читаем gear_ratio (передаточное число редуктора, по умолчанию 1.0 = прямой привод)
+  double gear_ratio = 1.0;
+  if (info.hardware_parameters.find("gear_ratio") != info.hardware_parameters.end()) {
+    gear_ratio = std::stod(info.hardware_parameters.at("gear_ratio"));
+  }
+  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    "Gear ratio configured: %.1f", gear_ratio);
+
   // Инициализация CAN
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_);
   if (!can_interface_->open()) {
@@ -75,13 +83,14 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
       return can_interface_->sendFrame(f);
     });
     
-    // Установка калибровки max_rps и min_duty
+    // Установка калибровки max_rps, gear_ratio и min_duty
     handler->setMaxRps(max_rps);
+    handler->setGearRatio(gear_ratio);
     handler->setMinDuty(min_duty);
     
     RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"),
-      "[%s] can_id=%d, max_rps=%.2f, max_speed=%.2f m/s, min_duty=%.3f",
-      joint.name.c_str(), can_id, max_rps, handler->getMaxSpeed(), min_duty);
+      "[%s] can_id=%d, max_rps=%.2f, gear_ratio=%.1f, max_speed=%.2f m/s, min_duty=%.3f",
+      joint.name.c_str(), can_id, max_rps, gear_ratio, handler->getMaxSpeed(), min_duty);
     
     vesc_handlers_.push_back(handler);
 
