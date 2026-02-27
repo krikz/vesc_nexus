@@ -1,37 +1,26 @@
 <?xml version='1.0' encoding='utf-8'?>
 <package format="3">
   <name>vesc_nexus</name>
-  <version>0.1.0</version>
+  <version>2.0.0</version>
   <description>
-    Multi-CAN VESC driver for ROS 2. Supports multiple CAN interfaces and VESC IDs.
+    VESC hardware interface for ros2_control. CAN-based motor control for Rob Box.
   </description>
 
-  <maintainer email="you@example.com">Your Name</maintainer>
+  <maintainer email="krikz@github.com">Rob Box Team</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>rosidl_default_generators</buildtool_depend>
 
   <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
   <depend>rclcpp_lifecycle</depend>
-  <depend>std_msgs</depend>  
-  <depend>diagnostic_msgs</depend>
-  <depend>geometry_msgs</depend>
-  <depend>vesc_msgs</depend>
-  <depend>serial_driver</depend>
-  <depend>tf2_ros</depend>
-  <depend>sensor_msgs</depend>
-  <depend>nav_msgs</depend>
   <depend>hardware_interface</depend>
-  <depend>controller_manager</depend>
-  <exec_depend>ros2controlcli</exec_depend>
   <depend>pluginlib</depend>
+  <depend>vesc_msgs</depend>
+
+  <exec_depend>controller_manager</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
-  <exec_depend>rosidl_default_runtime</exec_depend>
-  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>
     <build_type>ament_cmake</build_type>

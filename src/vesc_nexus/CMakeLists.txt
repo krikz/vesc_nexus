@@ -1,95 +1,85 @@
 cmake_minimum_required(VERSION 3.8)
 project(vesc_nexus)
 
-# Set minimum C++ standard to C++14
-if(NOT "${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}")
-  message(STATUS "Changing CXX_STANDARD from C++98 to C++14")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-elseif("${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}" STREQUAL "98")
-  message(STATUS "Changing CXX_STANDARD from C++98 to C++14")
-  set(CMAKE_CXX_STANDARD 14)
-endif()
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find dependencies
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
-find_package(Threads)
-
-###########
-## Build ##
-###########
-
-# node library
-ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/can_interface.cpp
-  src/message_translator.cpp
-  src/odometry_publisher.cpp
-  src/vesc_can_driver_node.cpp
-  src/vesc_handler.cpp
-)
-target_link_libraries(${PROJECT_NAME}
-  ${CMAKE_THREAD_LIBS_INIT}
-)
-rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN VescCanDriverNode
-  EXECUTABLE vesc_can_driver_node
-)
-
-# Новая shared-библиотека для hardware_interface
+# ═══════════════════════════════════════════════════════════════
+# Dependencies
+# ═══════════════════════════════════════════════════════════════
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(rclcpp_lifecycle REQUIRED)
+find_package(vesc_msgs REQUIRED)
+find_package(Threads REQUIRED)
 
+# ═══════════════════════════════════════════════════════════════
+# Hardware Interface Library (ros2_control plugin)
+# ═══════════════════════════════════════════════════════════════
 add_library(vesc_hardware_interface SHARED
   src/vesc_system_hardware_interface.cpp
+  src/vesc_handler.cpp
+  src/can_interface.cpp
+  src/message_translator.cpp
 )
 
-# Только основная библиотека проекта
-target_link_libraries(vesc_hardware_interface
-  ${PROJECT_NAME}
-)
-
-# Указываем зависимости через ament
-ament_target_dependencies(vesc_hardware_interface
-  rclcpp
-  rclcpp_lifecycle
-  hardware_interface
-  pluginlib
-)
-
-# Include директории
 target_include_directories(vesc_hardware_interface PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-# Экспорт pluginlib
+target_link_libraries(vesc_hardware_interface
+  ${CMAKE_THREAD_LIBS_INIT}
+)
+
+ament_target_dependencies(vesc_hardware_interface
+  rclcpp
+  rclcpp_lifecycle
+  hardware_interface
+  pluginlib
+  vesc_msgs
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Install & Export
+# ═══════════════════════════════════════════════════════════════
 pluginlib_export_plugin_description_file(hardware_interface vesc_nexus_plugins.xml)
 
-# Установка
 install(TARGETS vesc_hardware_interface
-  DESTINATION lib
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
+install(DIRECTORY include/
+  DESTINATION include
+)
 
-#############
-## Testing ##
-#############
+# Install calibration tools
+install(DIRECTORY tools/
+  DESTINATION share/${PROJECT_NAME}/tools
+  PATTERN "*.py"
+  PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+)
 
+# ═══════════════════════════════════════════════════════════════
+# Testing
+# ═══════════════════════════════════════════════════════════════
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  find_package(ament_cmake_gmock REQUIRED)
-  find_package(hardware_interface REQUIRED)
-
   ament_lint_auto_find_test_dependencies()
-
 endif()
 
+ament_export_include_directories(include)
 ament_export_libraries(vesc_hardware_interface)
-
-ament_auto_package(
-  INSTALL_TO_SHARE
-    launch
-    config
-    urdf
+ament_export_dependencies(
+  rclcpp
+  rclcpp_lifecycle
+  hardware_interface
+  pluginlib
+  vesc_msgs
 )
+
+ament_package()

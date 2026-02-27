@@ -61,27 +61,9 @@ public:
 
     /**
      * @brief Установить минимальный duty cycle для преодоления мёртвой зоны
-     * @param min_duty Минимальный duty (0.0-1.0), типично 0.05-0.10
+     * @param min_duty Минимальный duty (0.0-1.0), типично 0.02-0.08
      */
     void setMinDuty(double min_duty) { min_duty_ = min_duty; }
-
-    /**
-     * @brief Включить/выключить PWM модуляцию для низких скоростей
-     * @param enabled true - использовать PWM модуляцию при duty < min_duty
-     */
-    void setPwmModulationEnabled(bool enabled) { pwm_modulation_enabled_ = enabled; }
-
-    /**
-     * @brief Установить параметры PWM модуляции
-     * @param duty_low Низкий duty cycle (типично 0.01-0.03)
-     * @param duty_high Высокий duty cycle (типично min_duty)
-     * @param frequency Частота PWM модуляции в Гц (типично 50 Hz)
-     */
-    void setPwmModulationParams(double duty_low, double duty_high, double frequency) {
-        pwm_duty_low_ = duty_low;
-        pwm_duty_high_ = duty_high;
-        pwm_frequency_hz_ = frequency;
-    }
 
     /**
      * @brief Получить накопленную позицию колеса (rad)
@@ -113,13 +95,6 @@ private:
     double max_speed_mps_ = 0.0;      // расчётная макс. скорость (м/с)
     double min_duty_ = 0.0;           // минимальный duty для преодоления мёртвой зоны
     
-    // PWM модуляция для ультра-низких скоростей
-    bool pwm_modulation_enabled_ = false;  // включить PWM модуляцию
-    double pwm_duty_low_ = 0.01;          // низкий duty для PWM
-    double pwm_duty_high_ = 0.1;          // высокий duty для PWM (обычно = min_duty_)
-    double pwm_frequency_hz_ = 50.0;      // частота PWM в Гц
-    size_t pwm_cycle_counter_ = 0;        // счётчик для PWM цикла
-    
     // Для подсчёта частоты отправки команд
     size_t send_speed_count_;
     std::chrono::steady_clock::time_point last_freq_log_time_;
@@ -137,11 +112,4 @@ private:
     // Вспомогательные функции
     void updateMaxSpeed();
     double clamp(double value, double lo, double hi) const;
-    
-    /**
-     * @brief Вычислить duty cycle с PWM модуляцией
-     * @param target_duty Желаемый duty cycle (может быть < min_duty)
-     * @return Фактический duty для отправки (LOW или HIGH)
-     */
-    double calculatePwmDuty(double target_duty);
 };
