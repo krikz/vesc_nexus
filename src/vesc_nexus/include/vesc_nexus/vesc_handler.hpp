@@ -9,6 +9,12 @@
 #include "message_translator.hpp"
 #include <vesc_msgs/msg/vesc_state.hpp>
 
+// Режим управления моторами
+enum class ControlMode {
+    DUTY,  // Открытый контур: duty cycle (% напряжения)
+    RPM    // Замкнутый контур: ERPM через VESC PID
+};
+
 class VescHandler {
 public:
     using SendCanFrameFunc = std::function<bool(const struct can_frame&)>;
@@ -26,6 +32,8 @@ public:
     void sendDutyCycle(double duty);
     void sendCurrent(double current);
     void sendSpeed(double linear_speed);
+    void sendSpeedRpm(double linear_speed);
+    void sendCommand(double linear_speed);  // dispatches to sendSpeed or sendSpeedRpm based on control_mode
     void sendBrake(double brake);
     void sendPosition(double pos);
 
@@ -73,6 +81,13 @@ public:
     void setMinDuty(double min_duty) { min_duty_ = min_duty; }
 
     /**
+     * @brief Установить режим управления
+     * @param mode ControlMode::DUTY (открытый контур) или ControlMode::RPM (замкнутый)
+     */
+    void setControlMode(ControlMode mode) { control_mode_ = mode; }
+    ControlMode getControlMode() const { return control_mode_; }
+
+    /**
      * @brief Получить накопленную позицию колеса (rad)
      * Интегрируется по реальным интервалам между CAN пакетами
      */
@@ -102,6 +117,7 @@ private:
     double gear_ratio_ = 1.0;         // передаточное число редуктора (wheel_rps = motor_rps / gear_ratio)
     double max_speed_mps_ = 0.0;      // расчётная макс. скорость колеса (м/с)
     double min_duty_ = 0.0;           // минимальный duty для преодоления мёртвой зоны
+    ControlMode control_mode_ = ControlMode::DUTY;  // режим управления (duty или rpm)
     
     // Для подсчёта частоты отправки команд
     size_t send_speed_count_;

@@ -180,6 +180,65 @@ void VescHandler::sendSpeed(double linear_speed) {
     send_can_func_(frame);
 }
 
+void VescHandler::sendSpeedRpm(double linear_speed) {
+    if (!send_can_func_) return;
+
+    // Счётчик для подсчёта частоты отправки
+    send_speed_count_++;
+    
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_freq_log_time_).count();
+    
+    // Логируем частоту каждые 2 секунды
+    if (elapsed >= 2000) {
+        double frequency = (send_speed_count_ * 1000.0) / elapsed;
+        RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
+                    "[%s] sendSpeedRpm: freq=%.1f Hz, gear_ratio=%.2f, pole_pairs=%d",
+                    label_.c_str(), frequency, gear_ratio_, pole_pairs_);
+        send_speed_count_ = 0;
+        last_freq_log_time_ = now;
+    }
+
+    // Конвертируем линейную скорость (м/с) → ERPM
+    // linear_speed → wheel_rps → motor_rps → ERPM
+    // wheel_rps = linear_speed / (2π × wheel_radius)
+    // motor_rps = wheel_rps × gear_ratio
+    // erpm = motor_rps × pole_pairs × 60
+    double wheel_rps = 0.0;
+    if (wheel_radius_ > 0.0) {
+        wheel_rps = linear_speed / (2.0 * M_PI * wheel_radius_);
+    }
+    double motor_rps = wheel_rps * gear_ratio_;
+    double erpm = motor_rps * pole_pairs_ * 60.0;
+
+    // Clamp to VESC limits
+    erpm = clamp(erpm, -23250.0, 23250.0);
+
+    // Логируем изменения значений
+    double speed_delta = std::abs(linear_speed - last_linear_speed_);
+    
+    if (speed_delta > 0.001) {
+        RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
+                    "[%s] RPM mode: speed=%.4f m/s → ERPM=%.0f (wheel_rps=%.2f, motor_rps=%.2f)",
+                    label_.c_str(), linear_speed, erpm, wheel_rps, motor_rps);
+    }
+    
+    last_linear_speed_ = linear_speed;
+    last_duty_ = 0.0;  // not used in RPM mode
+
+    // Отправляем ERPM через CAN_PACKET_SET_RPM
+    auto frame = vesc_nexus::createSetSpeedFrame(can_id_, erpm);
+    send_can_func_(frame);
+}
+
+void VescHandler::sendCommand(double linear_speed) {
+    if (control_mode_ == ControlMode::RPM) {
+        sendSpeedRpm(linear_speed);
+    } else {
+        sendSpeed(linear_speed);
+    }
+}
+
 void VescHandler::sendBrake(double brake) {
     if (send_can_func_) {
         auto frame = vesc_nexus::createSetBrakeFrame(can_id_, brake);

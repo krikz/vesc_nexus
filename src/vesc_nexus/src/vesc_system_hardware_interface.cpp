@@ -35,6 +35,23 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Min duty configured: %.3f", min_duty);
 
+  // Читаем control_mode: "duty" (duty cycle) или "rpm" (ERPM через VESC PID)
+  ControlMode control_mode = ControlMode::DUTY;  // по умолчанию обратная совместимость
+  if (info.hardware_parameters.find("control_mode") != info.hardware_parameters.end()) {
+    std::string mode_str = info.hardware_parameters.at("control_mode");
+    if (mode_str == "rpm" || mode_str == "RPM") {
+      control_mode = ControlMode::RPM;
+      RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+        "Control mode: RPM (closed-loop velocity via VESC PID)");
+    } else {
+      RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+        "Control mode: DUTY (open-loop duty cycle)");
+    }
+  } else {
+    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      "Control mode: DUTY (default, no control_mode parameter found)");
+  }
+
   // Читаем gear_ratio (передаточное число редуктора, по умолчанию 1.0 = прямой привод)
   double gear_ratio = 1.0;
   if (info.hardware_parameters.find("gear_ratio") != info.hardware_parameters.end()) {
@@ -87,10 +104,12 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     handler->setMaxRps(max_rps);
     handler->setGearRatio(gear_ratio);
     handler->setMinDuty(min_duty);
+    handler->setControlMode(control_mode);
     
     RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"),
-      "[%s] can_id=%d, max_rps=%.2f, gear_ratio=%.1f, max_speed=%.2f m/s, min_duty=%.3f",
-      joint.name.c_str(), can_id, max_rps, gear_ratio, handler->getMaxSpeed(), min_duty);
+      "[%s] can_id=%d, max_rps=%.2f, gear_ratio=%.1f, max_speed=%.2f m/s, min_duty=%.3f, mode=%s",
+      joint.name.c_str(), can_id, max_rps, gear_ratio, handler->getMaxSpeed(), min_duty,
+      control_mode == ControlMode::RPM ? "RPM" : "DUTY");
     
     vesc_handlers_.push_back(handler);
 
@@ -232,7 +251,7 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
     if (std::abs(cmd_velocities_[i]) > 0.001) {  // Порог ~0.001 rad/s (игнорируем шум)
       // Активная команда - обновляем timestamp и отправляем
       last_nonzero_cmd_time_[i] = time;
-      vesc_handlers_[i]->sendSpeed(linear_speed);
+      vesc_handlers_[i]->sendCommand(linear_speed);
       all_motors_idle = false;
       
     } else {
@@ -241,7 +260,7 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
       
       if (time_since_last_cmd < command_timeout_) {
         // Всё ещё в пределах timeout - отправляем ноль для активного торможения
-        vesc_handlers_[i]->sendSpeed(0.0);
+        vesc_handlers_[i]->sendCommand(0.0);
         all_motors_idle = false;
       }
       // else: Timeout истёк - НЕ отправляем команды, мотор расслабляется
