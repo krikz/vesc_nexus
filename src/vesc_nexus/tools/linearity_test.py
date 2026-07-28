@@ -37,7 +37,7 @@ except ImportError:
     print("   Установите: pip install matplotlib")
 
 
-# VESC CAN Protocol Constants  
+# VESC CAN Protocol Constants
 CAN_PACKET_SET_DUTY = 0
 CAN_PACKET_STATUS = 9
 
@@ -50,7 +50,7 @@ SAMPLES_PER_POINT = 5      # Количество измерений для ус
 
 @dataclass
 class MeasurementPoint:
-    """Одна точка измерения"""
+    """Одна точка измерения."""
     duty_cycle: float
     rpm: float
     rps: float
@@ -60,7 +60,7 @@ class MeasurementPoint:
 
 @dataclass
 class LinearityTestResult:
-    """Результат теста линейности"""
+    """Результат теста линейности."""
     vesc_id: int
     direction: str  # "forward" или "backward"
     points: List[MeasurementPoint]
@@ -70,14 +70,14 @@ class LinearityTestResult:
 
 
 class VescLinearityTester:
-    """Тестер линейности VESC"""
-    
+    """Тестер линейности VESC."""
+
     def __init__(self, can_interface: str):
         self.can_interface = can_interface
         self.bus: Optional[can.Bus] = None
-        
+
     def connect(self) -> bool:
-        """Подключение к CAN шине"""
+        """Подключение к CAN шине."""
         try:
             self.bus = can.Bus(channel=self.can_interface, interface='socketcan')
             print(f"✅ Подключено к CAN: {self.can_interface}")
@@ -85,14 +85,14 @@ class VescLinearityTester:
         except Exception as e:
             print(f"❌ Ошибка подключения: {e}")
             return False
-    
+
     def disconnect(self):
-        """Отключение"""
+        """Отключение."""
         if self.bus:
             self.bus.shutdown()
-    
+
     def send_duty_cycle(self, vesc_id: int, duty: float):
-        """Отправка команды duty cycle"""
+        """Отправка команды duty cycle."""
         duty_scaled = int(duty * 100000)
         data = struct.pack('>i', duty_scaled)
         can_id = (CAN_PACKET_SET_DUTY << 8) | vesc_id
@@ -105,17 +105,17 @@ class VescLinearityTester:
             self.bus.send(msg)
         except can.CanError as e:
             print(f"Ошибка CAN: {e}")
-    
+
     def read_status(self, timeout: float = 0.1) -> Optional[tuple]:
-        """Чтение статуса VESC"""
+        """Чтение статуса VESC."""
         try:
             msg = self.bus.recv(timeout=timeout)
             if msg is None:
                 return None
-            
+
             vesc_id = msg.arbitration_id & 0xFF
             cmd_id = (msg.arbitration_id >> 8) & 0xFF
-            
+
             if cmd_id == CAN_PACKET_STATUS and len(msg.data) >= 8:
                 erpm = struct.unpack('>i', msg.data[0:4])[0]
                 current = struct.unpack('>h', msg.data[4:6])[0] / 10.0
@@ -123,15 +123,15 @@ class VescLinearityTester:
         except Exception:
             pass
         return None
-    
+
     def measure_point(self, vesc_id: int, duty: float) -> MeasurementPoint:
-        """Измерение одной точки с усреднением"""
+        """Измерение одной точки с усреднением."""
         self.send_duty_cycle(vesc_id, duty)
         time.sleep(SETTLE_TIME)
-        
+
         rpm_values = []
         current_values = []
-        
+
         # Собираем несколько измерений
         start = time.time()
         while len(rpm_values) < SAMPLES_PER_POINT and time.time() - start < 2.0:
@@ -139,10 +139,10 @@ class VescLinearityTester:
             if result and result[0] == vesc_id:
                 rpm_values.append(result[1])
                 current_values.append(result[2])
-        
+
         avg_rpm = sum(rpm_values) / len(rpm_values) if rpm_values else 0.0
         avg_current = sum(current_values) / len(current_values) if current_values else 0.0
-        
+
         return MeasurementPoint(
             duty_cycle=duty,
             rpm=avg_rpm,
@@ -150,17 +150,17 @@ class VescLinearityTester:
             current=avg_current,
             timestamp=datetime.now().isoformat()
         )
-    
+
     def run_linearity_test(
-        self, 
-        vesc_id: int, 
+        self,
+        vesc_id: int,
         duty_step: float = DEFAULT_DUTY_STEP,
         duty_max: float = DEFAULT_DUTY_MAX,
         direction: int = 1
     ) -> LinearityTestResult:
         """
         Запуск теста линейности
-        
+
         Args:
             vesc_id: ID VESC
             duty_step: Шаг duty cycle
@@ -169,31 +169,31 @@ class VescLinearityTester:
         """
         dir_name = "forward" if direction > 0 else "backward"
         dir_ru = "ВПЕРЁД" if direction > 0 else "НАЗАД"
-        
+
         print(f"\n📊 Тест линейности {dir_ru} для VESC {vesc_id}")
         print(f"   Шаг: {duty_step*100:.1f}%, Максимум: {duty_max*100:.0f}%")
         print("-" * 50)
-        
+
         points = []
         duty = 0.0
-        
+
         while duty <= duty_max:
             actual_duty = duty * direction
             point = self.measure_point(vesc_id, actual_duty)
             points.append(point)
-            
+
             print(f"   duty={actual_duty:+.2f} → RPM={point.rpm:8.1f}, "
                   f"RPS={point.rps:6.2f}, I={point.current:5.1f}A")
-            
+
             duty += duty_step
-        
+
         # Остановка
         self.send_duty_cycle(vesc_id, 0.0)
         time.sleep(0.5)
-        
+
         # Расчёт линейной регрессии
         r_squared, slope, intercept = self._calculate_regression(points)
-        
+
         return LinearityTestResult(
             vesc_id=vesc_id,
             direction=dir_name,
@@ -202,41 +202,41 @@ class VescLinearityTester:
             slope=slope,
             intercept=intercept
         )
-    
+
     def _calculate_regression(self, points: List[MeasurementPoint]) -> tuple:
-        """Расчёт линейной регрессии и R²"""
+        """Расчёт линейной регрессии и R²."""
         if len(points) < 2:
             return (0.0, 0.0, 0.0)
-        
+
         x = [abs(p.duty_cycle) for p in points]
         y = [abs(p.rpm) for p in points]
-        
+
         n = len(x)
         sum_x = sum(x)
         sum_y = sum(y)
         sum_xy = sum(xi * yi for xi, yi in zip(x, y))
         sum_x2 = sum(xi ** 2 for xi in x)
-        
+
         # Наклон и пересечение
         denom = n * sum_x2 - sum_x ** 2
         if abs(denom) < 1e-10:
             return (0.0, 0.0, sum_y / n if n > 0 else 0.0)
-        
+
         slope = (n * sum_xy - sum_x * sum_y) / denom
         intercept = (sum_y - slope * sum_x) / n
-        
+
         # R²
         y_mean = sum_y / n
         ss_tot = sum((yi - y_mean) ** 2 for yi in y)
         ss_res = sum((yi - (slope * xi + intercept)) ** 2 for xi, yi in zip(x, y))
-        
+
         r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-        
+
         return (r_squared, slope, intercept)
 
 
 def save_results_csv(result: LinearityTestResult, filename: str):
-    """Сохранение в CSV"""
+    """Сохранение в CSV."""
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['duty_cycle', 'rpm', 'rps', 'current', 'timestamp'])
@@ -246,7 +246,7 @@ def save_results_csv(result: LinearityTestResult, filename: str):
 
 
 def save_results_json(result: LinearityTestResult, filename: str):
-    """Сохранение в JSON"""
+    """Сохранение в JSON."""
     data = {
         'vesc_id': result.vesc_id,
         'direction': result.direction,
@@ -262,27 +262,27 @@ def save_results_json(result: LinearityTestResult, filename: str):
 
 
 def generate_plot(results: List[LinearityTestResult], filename: str):
-    """Генерация графика"""
+    """Генерация графика."""
     if not HAS_MATPLOTLIB:
         return
-    
+
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    
+
     for i, result in enumerate(results):
         ax = axes[i] if len(results) > 1 else axes[0]
-        
+
         duties = [abs(p.duty_cycle) * 100 for p in result.points]
         rpms = [abs(p.rpm) for p in result.points]
-        
+
         # Точки данных
         ax.scatter(duties, rpms, label='Измерения', alpha=0.7, s=50)
-        
+
         # Линия регрессии
         if result.slope != 0:
             x_line = [0, max(duties)]
             y_line = [result.intercept, result.slope * max(duties)/100 + result.intercept]
             ax.plot(x_line, y_line, 'r--', label=f'Регрессия (R²={result.r_squared:.4f})')
-        
+
         ax.set_xlabel('Duty Cycle (%)')
         ax.set_ylabel('RPM')
         ax.set_title(f'VESC {result.vesc_id} - {result.direction.upper()}\n'
@@ -290,7 +290,7 @@ def generate_plot(results: List[LinearityTestResult], filename: str):
                      f'({"Линейно ✓" if result.r_squared > 0.95 else "Нелинейно ✗"})')
         ax.legend()
         ax.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
     plt.savefig(filename, dpi=150)
     print(f"📊 График сохранён: {filename}")
@@ -335,9 +335,9 @@ def main():
         action='store_true',
         help='Тестировать оба направления'
     )
-    
+
     args = parser.parse_args()
-    
+
     print("🔬 VESC Тест линейности duty → RPM")
     print("=" * 50)
     print(f"VESC ID: {args.vesc_id}")
@@ -345,18 +345,18 @@ def main():
     print(f"Шаг: {args.duty_step * 100:.1f}%")
     print(f"Максимум: {args.duty_max * 100:.0f}%")
     print("=" * 50)
-    
+
     print("\n⚠️  Убедитесь что колесо может свободно вращаться!")
     input("Нажмите Enter для начала теста...")
-    
+
     tester = VescLinearityTester(args.can_interface)
-    
+
     if not tester.connect():
         sys.exit(1)
-    
+
     try:
         results = []
-        
+
         # Тест вперёд
         result_fwd = tester.run_linearity_test(
             args.vesc_id,
@@ -365,12 +365,12 @@ def main():
             direction=1
         )
         results.append(result_fwd)
-        
+
         # Тест назад (если запрошено)
         if args.both_directions:
             print("\n⏸️  Пауза 2 сек перед тестом назад...")
             time.sleep(2.0)
-            
+
             result_bwd = tester.run_linearity_test(
                 args.vesc_id,
                 args.duty_step,
@@ -378,17 +378,17 @@ def main():
                 direction=-1
             )
             results.append(result_bwd)
-        
+
         # Сохранение результатов
         for result in results:
             prefix = f"{args.output_prefix}_vesc{result.vesc_id}_{result.direction}"
             save_results_csv(result, f"{prefix}.csv")
             save_results_json(result, f"{prefix}.json")
-        
+
         # Генерация графика
         plot_filename = f"{args.output_prefix}_vesc{args.vesc_id}_plot.png"
         generate_plot(results, plot_filename)
-        
+
         # Итоговый отчёт
         print("\n" + "=" * 50)
         print("📋 ИТОГОВЫЙ ОТЧЁТ")
@@ -399,10 +399,10 @@ def main():
             print(f"  R² = {result.r_squared:.4f} → {linearity}")
             print(f"  Наклон: {result.slope:.2f} RPM/duty")
             print(f"  Пересечение: {result.intercept:.2f} RPM")
-        
+
     finally:
         tester.disconnect()
-    
+
     print("\n✅ Тест завершён!")
 
 
