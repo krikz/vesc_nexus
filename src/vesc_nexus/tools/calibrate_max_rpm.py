@@ -42,6 +42,7 @@ DUTY_MAX = 1.0            # Максимальный duty cycle
 SETTLE_TIME = 1.0         # Время стабилизации оборотов (сек)
 RPM_CHANGE_THRESHOLD = 5  # Порог изменения механического RPM для детекции насыщения
 MAX_ITERATIONS = 25       # Максимум итераций разгона
+MAX_CONSECUTIVE_CAN_ERRORS = 10  # Порог подряд идущих ошибок CAN — после него калибровка прерывается
 
 
 @dataclass
@@ -67,6 +68,7 @@ class VescCalibrator:
         self.pole_pairs = pole_pairs  # количество пар полюсов (poles / 2)
         self.bus: Optional[can.Bus] = None
         self.current_rpm: Dict[int, float] = {}  # vesc_id → rpm
+        self.consecutive_can_errors = 0  # подряд идущие ошибки CAN (read/send)
 
     def connect(self) -> bool:
         """Подключение к CAN шине."""
@@ -99,8 +101,20 @@ class VescCalibrator:
 
         try:
             self.bus.send(msg)
+            self.consecutive_can_errors = 0
         except can.CanError as e:
-            print(f"Ошибка отправки CAN: {e}")
+            self._register_can_error(f"отправка duty={duty:+.2f} на VESC {vesc_id}", e)
+
+    def _register_can_error(self, operation: str, error: Exception):
+        """Учесть ошибку CAN: предупредить и прервать калибровку после порога подряд идущих сбоев."""
+        self.consecutive_can_errors += 1
+        print(f"⚠️  Ошибка CAN ({operation}): {error} "
+              f"[{self.consecutive_can_errors}/{MAX_CONSECUTIVE_CAN_ERRORS} подряд]")
+        if self.consecutive_can_errors >= MAX_CONSECUTIVE_CAN_ERRORS:
+            raise RuntimeError(
+                f"CAN-шина нестабильна: {self.consecutive_can_errors} ошибок подряд "
+                f"({operation}: {error}). Прерываю калибровку — проверьте подключение CAN."
+            ) from error
 
     def read_status(self, timeout: float = 0.1) -> Optional[tuple]:
         """Чтение статуса VESC (ERPM, current, duty)."""
@@ -118,9 +132,10 @@ class VescCalibrator:
                 duty = struct.unpack('>h', msg.data[6:8])[0] / 1000.0
                 # Конвертируем ERPM в механический RPM
                 mechanical_rpm = erpm / self.pole_pairs
+                self.consecutive_can_errors = 0
                 return (vesc_id, mechanical_rpm, current, duty)
-        except Exception:
-            pass
+        except (can.CanError, struct.error, ValueError) as e:
+            self._register_can_error("чтение статуса", e)
         return None
 
     def get_stable_rpm(self, vesc_id: int, duty: float, settle_time: float = SETTLE_TIME) -> float:
@@ -138,6 +153,12 @@ class VescCalibrator:
 
         if rpm_values:
             return sum(rpm_values) / len(rpm_values)
+
+        # Ни одного пакета статуса от VESC за окно измерений — это не «0 RPM»,
+        # а признак проблем с шиной/ID. Предупреждаем, чтобы калибровка не
+        # записала мусор как «максимальные обороты = 0».
+        print(f"⚠️  VESC {vesc_id} не прислал ни одного статуса при duty={duty:+.2f} "
+              f"(0 из ~5 измерений) — проверьте CAN и VESC ID")
         return 0.0
 
     def find_max_rpm(self, vesc_id: int, direction: int = 1) -> tuple:
