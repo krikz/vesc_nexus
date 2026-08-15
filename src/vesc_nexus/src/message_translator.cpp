@@ -20,6 +20,10 @@ can_frame vesc_nexus::createSetDutyCycleFrame(uint8_t can_id, double duty) {
     frame.can_id = ((CAN_PACKET_SET_DUTY << 8) | can_id) | CAN_EFF_FLAG;
     frame.can_dlc = 4;
 
+    // NaN/Inf guard: non-finite duty must not reach the int32 cast (UB).
+    if (!std::isfinite(duty)) {
+        duty = 0.0;
+    }
     int32_t value = static_cast<int32_t>(std::clamp(duty, -1.0, 1.0) * 100000.0);
     frame.data[0] = (value >> 24) & 0xFF;
     frame.data[1] = (value >> 16) & 0xFF;
@@ -35,6 +39,10 @@ can_frame vesc_nexus::createSetCurrentFrame(uint8_t can_id, double current) {
     frame.can_id |= CAN_EFF_FLAG;
     frame.can_dlc = 4;
     int index = 0;
+    // NaN/Inf guard: non-finite current must not reach the int32 cast (UB).
+    if (!std::isfinite(current)) {
+        current = 0.0;
+    }
     int32_t value = static_cast<int32_t>(std::clamp(current, -10.0, 10.0) * 1000.0);
     buffer_append_int32(frame.data, value, index);
     return frame;
@@ -50,6 +58,10 @@ can_frame vesc_nexus::createSetSpeedFrame(uint8_t can_id, double rpm) {
     frame.can_id = ((CAN_PACKET_SET_RPM << 8) | can_id) | CAN_EFF_FLAG;
     frame.can_dlc = 4;
 
+    // NaN/Inf guard: non-finite rpm must not reach the int32 cast (UB).
+    if (!std::isfinite(rpm)) {
+        rpm = 0.0;
+    }
     int32_t value = static_cast<int32_t>(std::clamp(rpm, -23250.0, 23250.0));
     frame.data[0] = (value >> 24) & 0xFF;
     frame.data[1] = (value >> 16) & 0xFF;
@@ -65,6 +77,10 @@ can_frame vesc_nexus::createSetBrakeFrame(uint8_t can_id, double brake) {
     frame.can_id |= CAN_EFF_FLAG;
     frame.can_dlc = 4;
     int index = 0;
+    // NaN/Inf guard: non-finite brake must not reach the int32 cast (UB).
+    if (!std::isfinite(brake)) {
+        brake = 0.0;
+    }
     int32_t value = static_cast<int32_t>(std::clamp(brake, -20000.0, 200000.0) * 1000.0);
     buffer_append_int32(frame.data, value, index);
     return frame;
@@ -76,6 +92,10 @@ can_frame vesc_nexus::createSetPositionFrame(uint8_t can_id, double pos) {
     frame.can_id |= CAN_EFF_FLAG;
     frame.can_dlc = 4;
     int index = 0;
+    // NaN/Inf guard: non-finite pos must not reach the int32 cast (UB).
+    if (!std::isfinite(pos)) {
+        pos = 0.0;
+    }
     int32_t value = static_cast<int32_t>(std::clamp(pos, 0.0, 360.0) * 1000000.0);
     buffer_append_int32(frame.data, value, index);
     return frame;

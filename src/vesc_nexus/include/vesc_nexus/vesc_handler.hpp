@@ -78,7 +78,7 @@ public:
      * @brief Установить минимальный duty cycle для преодоления мёртвой зоны
      * @param min_duty Минимальный duty (0.0-1.0), типично 0.02-0.08
      */
-    void setMinDuty(double min_duty) { min_duty_ = min_duty; }
+    void setMinDuty(double min_duty) { min_duty_ = vesc_nexus::finite_or(min_duty, 0.0); }
 
     /**
      * @brief Установить режим управления
