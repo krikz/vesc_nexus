@@ -18,11 +18,23 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
 
   can_interface_name_ = info.hardware_parameters.at("can_interface");
   publish_rate_ = std::stod(info.hardware_parameters.at("publish_rate"));
+  // NaN/Inf guard: повреждённая конфигурация не должна дать NaN publish_rate.
+  if (!std::isfinite(publish_rate_) || publish_rate_ <= 0.0) {
+    publish_rate_ = 50.0;
+  }
   wheel_radius_ = std::stod(info.hardware_parameters.at("wheel_radius"));
+  // NaN/Inf guard: повреждённая конфигурация не должна дать NaN wheel_radius.
+  if (!std::isfinite(wheel_radius_) || wheel_radius_ <= 0.0) {
+    wheel_radius_ = 0.138;
+  }
   
   // Читаем параметр command_timeout (опционально, по умолчанию 0.5 секунды)
   if (info.hardware_parameters.find("command_timeout") != info.hardware_parameters.end()) {
     command_timeout_ = std::stod(info.hardware_parameters.at("command_timeout"));
+    // NaN/Inf guard
+    if (!std::isfinite(command_timeout_) || command_timeout_ <= 0.0) {
+      command_timeout_ = 0.5;
+    }
   }
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Command timeout configured: %.2f seconds", command_timeout_);
@@ -31,6 +43,10 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   double min_duty = 0.0;
   if (info.hardware_parameters.find("min_duty") != info.hardware_parameters.end()) {
     min_duty = std::stod(info.hardware_parameters.at("min_duty"));
+    // NaN/Inf guard
+    if (!std::isfinite(min_duty) || min_duty < 0.0) {
+      min_duty = 0.0;
+    }
   }
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Min duty configured: %.3f", min_duty);
@@ -56,6 +72,10 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   double gear_ratio = 1.0;
   if (info.hardware_parameters.find("gear_ratio") != info.hardware_parameters.end()) {
     gear_ratio = std::stod(info.hardware_parameters.at("gear_ratio"));
+    // NaN/Inf guard
+    if (!std::isfinite(gear_ratio) || gear_ratio <= 0.0) {
+      gear_ratio = 1.0;
+    }
   }
   RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
     "Gear ratio configured: %.1f", gear_ratio);
@@ -84,14 +104,26 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     double radius = wheel_radius_;
     if (joint.parameters.find("wheel_radius") != joint.parameters.end()) {
       radius = std::stod(joint.parameters.at("wheel_radius"));
+      // NaN/Inf guard: повреждённая конфигурация не должна дать NaN radius.
+      if (!std::isfinite(radius) || radius <= 0.0) {
+        radius = wheel_radius_;
+      }
     }
     int poles = std::stoi(joint.parameters.at("poles"));
+    // NaN/Inf guard: невалидное число полюсов не должно дать деление на ноль.
+    if (poles < 2) {
+      poles = 14;  // типичное значение для BLDC-моторов Rob Box
+    }
     int64_t min_erpm = std::stoll(joint.parameters.at("min_erpm"));
     
     // Читаем max_rps из параметров joint (калибровка duty → скорость)
     double max_rps = 15.0;  // По умолчанию 15 об/сек (900 RPM)
     if (joint.parameters.find("max_rps") != joint.parameters.end()) {
       max_rps = std::stod(joint.parameters.at("max_rps"));
+      // NaN/Inf guard
+      if (!std::isfinite(max_rps) || max_rps <= 0.0) {
+        max_rps = 15.0;
+      }
     }
 
     auto handler = std::make_shared<VescHandler>(
@@ -203,6 +235,18 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
     hw_velocities_[i] = vesc_handlers_[i]->getVelocityRadPerSec();
     hw_positions_[i] = vesc_handlers_[i]->getAccumulatedPosition();
     hw_efforts_[i] = state.current_motor;
+
+    // NaN/Inf guard: повреждённые данные сенсора не должны попасть в ros2_control
+    // (иначе EKF/odometry получат NaN и уронят навигацию).
+    if (!std::isfinite(hw_velocities_[i])) {
+      hw_velocities_[i] = 0.0;
+    }
+    if (!std::isfinite(hw_positions_[i])) {
+      hw_positions_[i] = 0.0;
+    }
+    if (!std::isfinite(hw_efforts_[i])) {
+      hw_efforts_[i] = 0.0;
+    }
     
     // Debug: логируем данные от первого колеса
     if (should_log && i == 0 && std::abs(hw_velocities_[i]) > 0.1) {
@@ -217,7 +261,8 @@ hardware_interface::return_type VescSystemHardwareInterface::read(
   double min_voltage = std::numeric_limits<double>::max();
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
     const auto& state = vesc_handlers_[i]->getLastState();
-    if (state.voltage_input > 0.0) {  // Exclude zeros - disconnected/non-reporting VESCs
+    // NaN/Inf guard: voltage_input == NaN/Inf не должен попасть в агрегат.
+    if (std::isfinite(state.voltage_input) && state.voltage_input > 0.0) {  // Exclude zeros - disconnected/non-reporting VESCs
       min_voltage = std::min(min_voltage, state.voltage_input);
     }
   }
@@ -239,10 +284,18 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
     double wheel_radius = vesc_handlers_[i]->getWheelRadius();
     
     // Защита от некорректного радиуса колеса
-    if (wheel_radius <= 0.0) {
+    // NaN/Inf guard: !isfinite покрывает NaN (NaN <= 0.0 == false!).
+    if (!std::isfinite(wheel_radius) || wheel_radius <= 0.0) {
       RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescSystemHardwareInterface"),
         "Invalid wheel_radius (%.3f) for handler %zu. Skipping command.", wheel_radius, i);
       continue;
+    }
+
+    // NaN/Inf guard: повреждённая команда контроллера не должна уйти на VESC.
+    if (!std::isfinite(cmd_velocities_[i])) {
+      RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescSystemHardwareInterface"),
+        "Non-finite cmd_velocity (%.4f) for handler %zu. Treating as zero.", cmd_velocities_[i], i);
+      cmd_velocities_[i] = 0.0;
     }
     
     double linear_speed = cmd_velocities_[i] * wheel_radius;  // rad/s → m/s

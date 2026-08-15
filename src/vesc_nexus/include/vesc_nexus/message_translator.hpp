@@ -4,10 +4,18 @@
 #include <linux/can.h>
 #include <vesc_msgs/msg/vesc_state.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <cmath>
 #include <cstdint>
 #include <vesc_msgs/msg/vesc_state.hpp>
 
 namespace vesc_nexus {
+
+// Возвращает value, если оно конечно (не NaN/Inf), иначе fallback (по умолчанию 0.0).
+// Используется как guard для данных VESC: повреждённые пакеты CAN / конфигурация
+// не должны превращаться в NaN/Inf и ломать конвертацию или отправку фреймов.
+inline double finite_or(double value, double fallback = 0.0) {
+    return std::isfinite(value) ? value : fallback;
+}
 
 struct CommandLimits {
     double duty_cycle_min = -1.0;

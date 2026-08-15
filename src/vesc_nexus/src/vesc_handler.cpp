@@ -6,12 +6,17 @@
 VescHandler::VescHandler(uint8_t can_id, const std::string& label,
                          double wheel_radius, int poles, int64_t min_erpm,
                          const vesc_nexus::CommandLimits& limits)
-    : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
-     pole_pairs_(poles / 2), min_erpm_(min_erpm),
+    : can_id_(can_id), label_(label), limits_(limits),
+     wheel_radius_(vesc_nexus::finite_or(wheel_radius, 0.138)),
+     pole_pairs_((poles > 1) ? (poles / 2) : 1), min_erpm_(min_erpm),
      max_rps_(15.0),  // По умолчанию 15 об/сек при duty=100%
      send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now()),
      last_linear_speed_(0.0), last_duty_(0.0)
 {
+    // NaN/Inf guard: радиус колеса из конфига не должен быть NaN/Inf/<=0.
+    if (wheel_radius_ <= 0.0) {
+        wheel_radius_ = 0.138;
+    }
     updateMaxSpeed();
     
     RCLCPP_INFO(rclcpp::get_logger("VescHandler"), "Initialized VescHandler: "
@@ -22,6 +27,16 @@ VescHandler::VescHandler(uint8_t can_id, const std::string& label,
 }
 
 void VescHandler::updateMaxSpeed() {
+    // NaN/Inf guard: нефинитные параметры не должны дать NaN max_speed.
+    if (!std::isfinite(max_rps_) || max_rps_ <= 0.0) {
+        max_rps_ = 15.0;
+    }
+    if (!std::isfinite(gear_ratio_) || gear_ratio_ <= 0.0) {
+        gear_ratio_ = 1.0;
+    }
+    if (!std::isfinite(wheel_radius_) || wheel_radius_ <= 0.0) {
+        wheel_radius_ = 0.138;
+    }
     // max_wheel_speed = 2π × (max_motor_rps / gear_ratio) × wheel_radius
     double wheel_rps = max_rps_ / gear_ratio_;
     max_speed_mps_ = 2.0 * M_PI * wheel_rps * wheel_radius_;
@@ -51,11 +66,21 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
             vesc_nexus::parseStatusPacket(frame, last_state_);
             // Сохраняем raw ERPM для логирования
             double raw_erpm = last_state_.speed_rpm;
+            // NaN/Inf guard: повреждённый пакет CAN не должен дать деление на ноль
+            // (pole_pairs_ == 0 при poles < 2) или NaN/Inf скорость.
+            if (!std::isfinite(raw_erpm) || pole_pairs_ <= 0) {
+                last_state_.speed_rpm = 0.0;
+                velocity_rad_s_ = 0.0;
+                break;
+            }
             // Конвертируем ERPM → механический RPM
             last_state_.speed_rpm = last_state_.speed_rpm / pole_pairs_;
             
             // Конвертируем RPM → rad/s
             velocity_rad_s_ = last_state_.speed_rpm * (2.0 * M_PI / 60.0);
+            if (!std::isfinite(velocity_rad_s_)) {
+                velocity_rad_s_ = 0.0;
+            }
             
             // Накапливаем позицию по РЕАЛЬНОМУ интервалу между CAN пакетами
             auto now = std::chrono::steady_clock::now();
@@ -64,6 +89,11 @@ void VescHandler::processCanFrame(const struct can_frame& frame) {
                 // Защита от слишком больших dt (например, после паузы)
                 if (dt > 0.0 && dt < 0.5) {
                     accumulated_position_rad_ += velocity_rad_s_ * dt;
+                    // NaN/Inf guard: накопленная позиция не должна стать NaN/Inf
+                    // (один повреждённый пакет не должен отравить одометрию навсегда).
+                    if (!std::isfinite(accumulated_position_rad_)) {
+                        accumulated_position_rad_ = 0.0;
+                    }
                 }
             }
             last_status_time_ = now;
@@ -121,6 +151,13 @@ void VescHandler::sendCurrent(double current) {
 
 void VescHandler::sendSpeed(double linear_speed) {
     if (!send_can_func_) return;
+
+    // NaN/Inf guard: повреждённая команда не должна уйти на VESC.
+    if (!std::isfinite(linear_speed)) {
+        RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescHandler"),
+            "[%s] sendSpeed: non-finite linear_speed (%.4f), skipping", label_.c_str(), linear_speed);
+        return;
+    }
 
     // Счётчик для подсчёта частоты отправки
     send_speed_count_++;
@@ -182,6 +219,13 @@ void VescHandler::sendSpeed(double linear_speed) {
 
 void VescHandler::sendSpeedRpm(double linear_speed) {
     if (!send_can_func_) return;
+
+    // NaN/Inf guard: повреждённая команда не должна уйти на VESC.
+    if (!std::isfinite(linear_speed)) {
+        RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescHandler"),
+            "[%s] sendSpeedRpm: non-finite linear_speed (%.4f), skipping", label_.c_str(), linear_speed);
+        return;
+    }
 
     // Счётчик для подсчёта частоты отправки
     send_speed_count_++;
@@ -274,7 +318,11 @@ int VescHandler::getPolePairs() const {
 }
 
 void VescHandler::setGearRatio(double gear_ratio) {
-    gear_ratio_ = (gear_ratio > 0.0) ? gear_ratio : 1.0;
+    // NaN/Inf guard: нефинитный gear_ratio не должен ломать max_speed.
+    if (!std::isfinite(gear_ratio) || gear_ratio <= 0.0) {
+        gear_ratio = 1.0;
+    }
+    gear_ratio_ = gear_ratio;
     updateMaxSpeed();
     RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
                 "[%s] Gear ratio: %.1f → wheel_rps=%.2f, max_speed=%.2f м/с",
@@ -282,6 +330,10 @@ void VescHandler::setGearRatio(double gear_ratio) {
 }
 
 void VescHandler::setMaxRps(double max_rps) {
+    // NaN/Inf guard: нефинитный max_rps не должен ломать max_speed.
+    if (!std::isfinite(max_rps) || max_rps <= 0.0) {
+        max_rps = 15.0;
+    }
     max_rps_ = max_rps;
     updateMaxSpeed();
     RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
