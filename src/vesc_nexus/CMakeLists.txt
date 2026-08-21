@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.22)
 project(vesc_nexus)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -32,14 +32,11 @@ target_include_directories(vesc_hardware_interface PUBLIC
 
 target_link_libraries(vesc_hardware_interface
   ${CMAKE_THREAD_LIBS_INIT}
-)
-
-ament_target_dependencies(vesc_hardware_interface
-  rclcpp
-  rclcpp_lifecycle
-  hardware_interface
-  pluginlib
-  vesc_msgs
+  rclcpp::rclcpp
+  rclcpp_lifecycle::rclcpp_lifecycle
+  hardware_interface::hardware_interface
+  pluginlib::pluginlib
+  vesc_msgs::vesc_msgs
 )
 
 # ═══════════════════════════════════════════════════════════════

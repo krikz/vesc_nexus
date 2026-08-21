@@ -18,7 +18,8 @@ class VescSystemHardwareInterface : public hardware_interface::SystemInterface {
 public:
   RCLCPP_SHARED_PTR_DEFINITIONS(VescSystemHardwareInterface);
 
-  hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
+  hardware_interface::CallbackReturn on_init(
+    const hardware_interface::HardwareComponentInterfaceParams& params) override;
   hardware_interface::CallbackReturn on_configure(const rclcpp_lifecycle::State& previous_state) override;
   hardware_interface::CallbackReturn on_cleanup(const rclcpp_lifecycle::State& previous_state) override;
   hardware_interface::CallbackReturn on_activate(const rclcpp_lifecycle::State& previous_state) override;
@@ -39,7 +40,6 @@ private:
   std::vector<double> hw_velocities_;
   std::vector<double> hw_efforts_;
   std::vector<double> cmd_velocities_;
-  const hardware_interface::HardwareInfo * info_ = nullptr;
 
   std::string can_interface_name_;
   double publish_rate_ = 50.0;

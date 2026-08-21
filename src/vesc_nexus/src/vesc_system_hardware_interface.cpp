@@ -7,14 +7,14 @@
 namespace vesc_nexus {
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
-  const hardware_interface::HardwareInfo& info) {
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), "Initializing hardware interface...");
+  const hardware_interface::HardwareComponentInterfaceParams& params) {
+  RCLCPP_INFO(get_logger(), "Initializing hardware interface...");
 
-  if (hardware_interface::SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS) {
+  if (hardware_interface::SystemInterface::on_init(params) != hardware_interface::CallbackReturn::SUCCESS) {
     return hardware_interface::CallbackReturn::ERROR;
   }
   
-  info_ = &info;
+  const auto& info = get_hardware_info();
 
   can_interface_name_ = info.hardware_parameters.at("can_interface");
   publish_rate_ = std::stod(info.hardware_parameters.at("publish_rate"));
@@ -24,7 +24,7 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   if (info.hardware_parameters.find("command_timeout") != info.hardware_parameters.end()) {
     command_timeout_ = std::stod(info.hardware_parameters.at("command_timeout"));
   }
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+  RCLCPP_INFO(get_logger(), 
     "Command timeout configured: %.2f seconds", command_timeout_);
 
   // Читаем min_duty для преодоления мёртвой зоны VESC (опционально, по умолчанию 0.0)
@@ -32,7 +32,7 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   if (info.hardware_parameters.find("min_duty") != info.hardware_parameters.end()) {
     min_duty = std::stod(info.hardware_parameters.at("min_duty"));
   }
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+  RCLCPP_INFO(get_logger(), 
     "Min duty configured: %.3f", min_duty);
 
   // Читаем control_mode: "duty" (duty cycle) или "rpm" (ERPM через VESC PID)
@@ -41,14 +41,14 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     std::string mode_str = info.hardware_parameters.at("control_mode");
     if (mode_str == "rpm" || mode_str == "RPM") {
       control_mode = ControlMode::RPM;
-      RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      RCLCPP_INFO(get_logger(), 
         "Control mode: RPM (closed-loop velocity via VESC PID)");
     } else {
-      RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+      RCLCPP_INFO(get_logger(), 
         "Control mode: DUTY (open-loop duty cycle)");
     }
   } else {
-    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    RCLCPP_INFO(get_logger(), 
       "Control mode: DUTY (default, no control_mode parameter found)");
   }
 
@@ -57,13 +57,13 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
   if (info.hardware_parameters.find("gear_ratio") != info.hardware_parameters.end()) {
     gear_ratio = std::stod(info.hardware_parameters.at("gear_ratio"));
   }
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+  RCLCPP_INFO(get_logger(), 
     "Gear ratio configured: %.1f", gear_ratio);
 
   // Инициализация CAN
   can_interface_ = std::make_unique<CanInterface>(can_interface_name_);
   if (!can_interface_->open()) {
-    RCLCPP_FATAL(rclcpp::get_logger("VescSystemHardwareInterface"), "Failed to open CAN interface: %s", can_interface_name_.c_str());
+    RCLCPP_FATAL(get_logger(), "Failed to open CAN interface: %s", can_interface_name_.c_str());
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -106,7 +106,7 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
     handler->setMinDuty(min_duty);
     handler->setControlMode(control_mode);
     
-    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"),
+    RCLCPP_INFO(get_logger(),
       "[%s] can_id=%d, max_rps=%.2f, gear_ratio=%.1f, max_speed=%.2f m/s, min_duty=%.3f, mode=%s",
       joint.name.c_str(), can_id, max_rps, gear_ratio, handler->getMaxSpeed(), min_duty,
       control_mode == ControlMode::RPM ? "RPM" : "DUTY");
@@ -128,31 +128,31 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_init(
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_configure(
   const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), "Configured.");
+  RCLCPP_INFO(get_logger(), "Configured.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_cleanup(
   const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), "Cleaned up.");
+  RCLCPP_INFO(get_logger(), "Cleaned up.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_activate(
   const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), "Activated. Motors ready.");
+  RCLCPP_INFO(get_logger(), "Activated. Motors ready.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_deactivate(
   const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), "Deactivated.");
+  RCLCPP_INFO(get_logger(), "Deactivated.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_shutdown(
   const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), "Shutdown.");
+  RCLCPP_INFO(get_logger(), "Shutdown.");
   if (can_interface_) {
     can_interface_->close();
   }
@@ -161,14 +161,14 @@ hardware_interface::CallbackReturn VescSystemHardwareInterface::on_shutdown(
 
 hardware_interface::CallbackReturn VescSystemHardwareInterface::on_error(
   const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_ERROR(rclcpp::get_logger("VescSystemHardwareInterface"), "Error occurred.");
+  RCLCPP_ERROR(get_logger(), "Error occurred.");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::export_state_interfaces() {
   std::vector<hardware_interface::StateInterface> state_interfaces;
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
-    const auto & joint = info_->joints[i];  // info_ нужно сохранить в on_init
+    const auto & joint = get_hardware_info().joints[i];
     state_interfaces.emplace_back(joint.name, "position", &hw_positions_[i]);
     state_interfaces.emplace_back(joint.name, "velocity", &hw_velocities_[i]);
     state_interfaces.emplace_back(joint.name, "effort", &hw_efforts_[i]);
@@ -183,7 +183,7 @@ std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::exp
 std::vector<hardware_interface::CommandInterface> VescSystemHardwareInterface::export_command_interfaces() {
   std::vector<hardware_interface::CommandInterface> command_interfaces;
   for (size_t i = 0; i < vesc_handlers_.size(); ++i) {
-    const auto & joint = info_->joints[i];
+    const auto & joint = get_hardware_info().joints[i];
     command_interfaces.emplace_back(joint.name, "velocity", &cmd_velocities_[i]);
   }
   return command_interfaces;
@@ -240,7 +240,7 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
     
     // Защита от некорректного радиуса колеса
     if (wheel_radius <= 0.0) {
-      RCLCPP_ERROR_ONCE(rclcpp::get_logger("VescSystemHardwareInterface"),
+      RCLCPP_ERROR_ONCE(get_logger(),
         "Invalid wheel_radius (%.3f) for handler %zu. Skipping command.", wheel_radius, i);
       continue;
     }
@@ -269,11 +269,11 @@ hardware_interface::return_type VescSystemHardwareInterface::write(
   
   // Логируем изменение состояния (только при переходе)
   if (all_motors_idle && !motors_relaxed_) {
-    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    RCLCPP_INFO(get_logger(), 
       "All motors relaxed after %.2f seconds timeout", command_timeout_);
     motors_relaxed_ = true;
   } else if (!all_motors_idle && motors_relaxed_) {
-    RCLCPP_INFO(rclcpp::get_logger("VescSystemHardwareInterface"), 
+    RCLCPP_INFO(get_logger(), 
       "Motors activated by new command");
     motors_relaxed_ = false;
   }
