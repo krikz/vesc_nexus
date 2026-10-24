@@ -1,123 +1,88 @@
-// vesc_handler.hpp
+// Один VESC: преобразование скорости колеса в CAN-команду и разбор телеметрии.
 #pragma once
 
 #include <linux/can.h>
-#include <functional>
-#include <string>
+
 #include <chrono>
-#include <cmath>
-#include "message_translator.hpp"
+#include <cstdint>
+#include <functional>
+#include <mutex>
+#include <string>
+
 #include <vesc_msgs/msg/vesc_state.hpp>
 
+namespace vesc_nexus {
+
+enum class ControlMode {
+  DUTY,  ///< Открытый контур: duty cycle. Скорость задаётся через калибровку max_rps.
+  RPM    ///< Замкнутый контур: целевой ERPM, скорость держит PID внутри VESC.
+};
+
+/// processCanFrame() вызывается из потока приёма CAN, остальные методы — из потока controller_manager.
 class VescHandler {
 public:
-    using SendCanFrameFunc = std::function<bool(const struct can_frame&)>;
-    using StateUpdateCallback = std::function<void(const vesc_msgs::msg::VescState&)>;
+  using SendFrameFunc = std::function<bool(const can_frame&)>;
 
-    VescHandler(uint8_t can_id, const std::string& label,
-                double wheel_radius, int poles, int64_t min_erpm,
-                const vesc_nexus::CommandLimits& limits);
+  /// @param can_id  VESC ID на шине (0..254).
+  /// @param label   Имя joint, используется в логах.
+  /// @param poles   Число полюсов мотора; pole_pairs = max(1, poles / 2).
+  VescHandler(uint8_t can_id, std::string label, int poles);
 
-    void setSendCanFunc(SendCanFrameFunc func);
-    void setStateUpdateCallback(StateUpdateCallback cb);
+  void setSendFrameFunc(SendFrameFunc func);
+  void setControlMode(ControlMode mode) { control_mode_ = mode; }
 
-    void processCanFrame(const struct can_frame& frame);
-    void requestState();  // Отправить COMM_GET_VALUES
-    void sendDutyCycle(double duty);
-    void sendCurrent(double current);
-    void sendSpeed(double linear_speed);
-    void sendBrake(double brake);
-    void sendPosition(double pos);
+  /// Передаточное число редуктора: wheel_rps = motor_rps / gear_ratio. Невалидное значение игнорируется.
+  void setGearRatio(double gear_ratio);
+  /// Обороты мотора в секунду при duty = 100 % (только режим DUTY). Невалидное значение игнорируется.
+  void setMaxRps(double max_rps);
+  /// Минимальный duty для преодоления мёртвой зоны, 0..1 (только режим DUTY). Невалидное значение игнорируется.
+  void setMinDuty(double min_duty);
 
-    uint8_t getCanId() const;
-    std::string getLabel() const;
-    vesc_msgs::msg::VescState getLastState() const;
-    double getWheelRadius() const;
-    int getPolePairs() const;
+  /// Разобрать входящий фрейм. Фреймы других VESC, 11-битные ID и неизвестные пакеты игнорируются.
+  void processCanFrame(const can_frame& frame);
 
-    /**
-     * @brief Установить максимальные обороты в секунду при duty = 100%
-     * @param max_rps Обороты в секунду (замерить при калибровке: RPM / 60)
-     * 
-     * КАЛИБРОВКА:
-     * Используйте скрипт tools/calibrate_max_rpm.py для автоматической калибровки
-     * или вручную:
-     * 1. Поставить робота на подставку (колёса должны свободно крутиться)
-     * 2. Подать duty = 100% на колесо
-     * 3. Замерить RPM из телеметрии VESC
-     * 4. max_rps = RPM / 60
-     */
-    void setMaxRps(double max_rps);
+  /// Отправить скорость колеса (рад/с) в текущем режиме. NaN/Inf не отправляется, возвращает false.
+  bool sendVelocity(double wheel_rad_s);
 
-    /**
-     * @brief Установить передаточное число редуктора
-     * @param gear_ratio Передаточное число (>1 = понижение оборотов)
-     * wheel_rps = motor_rps / gear_ratio
-     */
-    void setGearRatio(double gear_ratio);
+  uint8_t getCanId() const { return can_id_; }
+  const std::string& getLabel() const { return label_; }
+  int getPolePairs() const { return pole_pairs_; }
+  ControlMode getControlMode() const { return control_mode_; }
+  double getGearRatio() const { return gear_ratio_; }
+  double getMaxRps() const { return max_rps_; }
+  double getMinDuty() const { return min_duty_; }
 
-    /**
-     * @brief Получить максимальные обороты в секунду (мотора)
-     */
-    double getMaxRps() const { return max_rps_; }
-
-    /**
-     * @brief Получить максимальную линейную скорость (м/с)
-     */
-    double getMaxSpeed() const { return max_speed_mps_; }
-
-    /**
-     * @brief Установить минимальный duty cycle для преодоления мёртвой зоны
-     * @param min_duty Минимальный duty (0.0-1.0), типично 0.02-0.08
-     */
-    void setMinDuty(double min_duty) { min_duty_ = min_duty; }
-
-    /**
-     * @brief Получить накопленную позицию колеса (rad)
-     * Интегрируется по реальным интервалам между CAN пакетами
-     */
-    double getAccumulatedPosition() const { return accumulated_position_rad_; }
-
-    /**
-     * @brief Получить текущую угловую скорость (rad/s)
-     */
-    double getVelocityRadPerSec() const { return velocity_rad_s_; }
+  /// Снимок телеметрии (потокобезопасно). speed_rpm — механические обороты вала мотора.
+  vesc_msgs::msg::VescState getLastState() const;
+  /// Угловая скорость колеса, рад/с (с учётом gear_ratio).
+  double getVelocityRadPerSec() const;
+  /// Накопленный угол колеса, рад: интеграл скорости по реальным интервалам между STATUS-пакетами.
+  double getAccumulatedPosition() const;
 
 private:
-    uint8_t can_id_;
-    std::string label_;
-    vesc_nexus::CommandLimits limits_;
-    vesc_msgs::msg::VescState last_state_;
+  /// Обороты мотора в секунду для заданной скорости колеса.
+  double motorRpsFor(double wheel_rad_s) const;
+  double dutyFor(double wheel_rad_s) const;
+  double erpmFor(double wheel_rad_s) const;
+  /// Обновить скорость и позицию после CAN_PACKET_STATUS. Вызывать под state_mutex_.
+  void updateMotion();
 
-    SendCanFrameFunc send_can_func_;
-    StateUpdateCallback state_update_cb_;
-    
-    double wheel_radius_;     // радиус колеса
-    int pole_pairs_;          // количество пар полюсов (poles / 2)
-    int64_t min_erpm_;        // минимальный ERPM для движения
-    
-    // Калибровка: максимальные обороты при duty=100%
-    // Используйте tools/calibrate_max_rpm.py для измерения
-    double max_rps_ = 15.0;           // обороты мотора в секунду при duty=100%
-    double gear_ratio_ = 1.0;         // передаточное число редуктора (wheel_rps = motor_rps / gear_ratio)
-    double max_speed_mps_ = 0.0;      // расчётная макс. скорость колеса (м/с)
-    double min_duty_ = 0.0;           // минимальный duty для преодоления мёртвой зоны
-    
-    // Для подсчёта частоты отправки команд
-    size_t send_speed_count_;
-    std::chrono::steady_clock::time_point last_freq_log_time_;
-    
-    // Для отслеживания изменений значений
-    double last_linear_speed_;
-    double last_duty_;
-    
-    // Накопление позиции по реальным интервалам CAN пакетов
-    std::chrono::steady_clock::time_point last_status_time_;
-    double accumulated_position_rad_ = 0.0;
-    double velocity_rad_s_ = 0.0;
-    bool first_status_received_ = false;
-    
-    // Вспомогательные функции
-    void updateMaxSpeed();
-    double clamp(double value, double lo, double hi) const;
+  const uint8_t can_id_;
+  const std::string label_;
+  const int pole_pairs_;
+
+  SendFrameFunc send_frame_;
+  ControlMode control_mode_{ControlMode::DUTY};
+  double gear_ratio_{1.0};
+  double max_rps_{15.0};
+  double min_duty_{0.0};
+
+  mutable std::mutex state_mutex_;
+  vesc_msgs::msg::VescState state_;
+  double velocity_rad_s_{0.0};
+  double position_rad_{0.0};
+  bool have_status_{false};
+  std::chrono::steady_clock::time_point last_status_time_;
 };
+
+}  // namespace vesc_nexus

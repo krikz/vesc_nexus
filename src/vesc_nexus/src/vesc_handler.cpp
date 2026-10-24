@@ -1,231 +1,145 @@
-// vesc_handler.cpp
 #include "vesc_nexus/vesc_handler.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <utility>
+
+#include <rclcpp/rclcpp.hpp>
+
 #include "vesc_nexus/message_translator.hpp"
-#include <rclcpp/logging.hpp>
 
-VescHandler::VescHandler(uint8_t can_id, const std::string& label,
-                         double wheel_radius, int poles, int64_t min_erpm,
-                         const vesc_nexus::CommandLimits& limits)
-    : can_id_(can_id), label_(label), limits_(limits), wheel_radius_(wheel_radius),
-     pole_pairs_(poles / 2), min_erpm_(min_erpm),
-     max_rps_(15.0),  // По умолчанию 15 об/сек при duty=100%
-     send_speed_count_(0), last_freq_log_time_(std::chrono::steady_clock::now()),
-     last_linear_speed_(0.0), last_duty_(0.0)
-{
-    updateMaxSpeed();
-    
-    RCLCPP_INFO(rclcpp::get_logger("VescHandler"), "Initialized VescHandler: "
-        "label='%s', can_id=%d, wheel_radius=%.3fm, poles=%d (%d pole pairs), min_erpm=%ld",
-        label_.c_str(), can_id_, wheel_radius_, poles, pole_pairs_, min_erpm_);
-    last_state_.label = label;
-    last_state_.alive = false;
+namespace vesc_nexus {
+namespace {
+
+rclcpp::Logger logger() { return rclcpp::get_logger("VescHandler"); }
+
+/// Интервалы длиннее этого (пауза, потеря связи) в позицию не интегрируются.
+constexpr double kMaxIntegrationDt = 0.5;  // с
+
+constexpr double kTwoPi = 2.0 * M_PI;
+
+}  // namespace
+
+VescHandler::VescHandler(uint8_t can_id, std::string label, int poles)
+    : can_id_(can_id), label_(std::move(label)), pole_pairs_(std::max(1, poles / 2)) {
+  state_.label = label_;
+  state_.alive = false;
+  if (poles < 2) {
+    RCLCPP_WARN(logger(), "[%s] poles=%d is invalid, using pole_pairs=1", label_.c_str(), poles);
+  }
 }
 
-void VescHandler::updateMaxSpeed() {
-    // max_wheel_speed = 2π × (max_motor_rps / gear_ratio) × wheel_radius
-    double wheel_rps = max_rps_ / gear_ratio_;
-    max_speed_mps_ = 2.0 * M_PI * wheel_rps * wheel_radius_;
-}
-
-double VescHandler::clamp(double value, double lo, double hi) const {
-    return (value < lo) ? lo : (value > hi) ? hi : value;
-}
-
-void VescHandler::setSendCanFunc(SendCanFrameFunc func) {
-    send_can_func_ = func;
-}
-
-void VescHandler::setStateUpdateCallback(StateUpdateCallback cb) {
-    state_update_cb_ = cb;
-}
-
-void VescHandler::processCanFrame(const struct can_frame& frame) {
-    uint8_t sender_id = frame.can_id & 0xFF;
-    uint8_t command_id = (frame.can_id >> 8) & 0xFF;
-
-    if (!frame.can_id & CAN_EFF_FLAG) return;  // Только 29-bit
-    if (sender_id != can_id_) return;
-
-    switch (command_id) {
-        case vesc_nexus::CAN_PACKET_STATUS: {
-            vesc_nexus::parseStatusPacket(frame, last_state_);
-            // Сохраняем raw ERPM для логирования
-            double raw_erpm = last_state_.speed_rpm;
-            // Конвертируем ERPM → механический RPM
-            last_state_.speed_rpm = last_state_.speed_rpm / pole_pairs_;
-            
-            // Конвертируем RPM → rad/s
-            velocity_rad_s_ = last_state_.speed_rpm * (2.0 * M_PI / 60.0);
-            
-            // Накапливаем позицию по РЕАЛЬНОМУ интервалу между CAN пакетами
-            auto now = std::chrono::steady_clock::now();
-            if (first_status_received_) {
-                double dt = std::chrono::duration<double>(now - last_status_time_).count();
-                // Защита от слишком больших dt (например, после паузы)
-                if (dt > 0.0 && dt < 0.5) {
-                    accumulated_position_rad_ += velocity_rad_s_ * dt;
-                }
-            }
-            last_status_time_ = now;
-            first_status_received_ = true;
-            
-            // DEBUG: логируем ERPM → RPM конвертацию (раз в секунду)
-            static auto last_log = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log).count() > 1000) {
-                if (std::abs(raw_erpm) > 10) {  // Только если есть движение
-                    RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
-                        "[%s] ERPM=%.0f, RPM=%.1f, vel=%.2f rad/s, pos=%.2f rad",
-                        label_.c_str(), raw_erpm, last_state_.speed_rpm, 
-                        velocity_rad_s_, accumulated_position_rad_);
-                    last_log = now;
-                }
-            }
-            break;
-        }
-        case vesc_nexus::CAN_PACKET_STATUS_2:
-            vesc_nexus::parseStatus2Packet(frame, last_state_);
-            break;
-        case vesc_nexus::CAN_PACKET_STATUS_4:
-            vesc_nexus::parseStatus4Packet(frame, last_state_);
-            break;
-        case vesc_nexus::CAN_PACKET_STATUS_5:
-            vesc_nexus::parseStatus5Packet(frame, last_state_);
-            break;
-        default:
-            return;
-    }
-
-    last_state_.alive = true;
-    if (state_update_cb_) {
-        state_update_cb_(last_state_);
-    }
-}
-
-void VescHandler::requestState() {
-    // Ничего не делаем — VESC сам шлёт статус
-}
-
-void VescHandler::sendDutyCycle(double duty) {
-    if (send_can_func_) {
-        auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty);
-        send_can_func_(frame);
-    }
-}
-
-void VescHandler::sendCurrent(double current) {
-    if (send_can_func_) {
-        auto frame = vesc_nexus::createSetCurrentFrame(can_id_, current);
-        send_can_func_(frame);
-    }
-}
-
-void VescHandler::sendSpeed(double linear_speed) {
-    if (!send_can_func_) return;
-
-    // Счётчик для подсчёта частоты отправки
-    send_speed_count_++;
-    
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_freq_log_time_).count();
-    
-    // Логируем частоту каждые 2 секунды
-    if (elapsed >= 2000) {
-        double frequency = (send_speed_count_ * 1000.0) / elapsed;
-        RCLCPP_INFO(rclcpp::get_logger("VescHandler"), 
-                    "[%s] sendSpeed: freq=%.1f Hz, max_rps=%.1f, max_speed=%.2f m/s", 
-                    label_.c_str(), frequency, max_rps_, max_speed_mps_);
-        send_speed_count_ = 0;
-        last_freq_log_time_ = now;
-    }
-
-    // Конвертируем линейную скорость (м/с) в duty cycle
-    // Формула: duty = target_speed / max_speed
-    // где max_speed = 2π × max_rps × wheel_radius (расчитано в updateMaxSpeed)
-    double target_duty = 0.0;
-    if (max_speed_mps_ > 0.0) {
-        target_duty = linear_speed / max_speed_mps_;
-        target_duty = clamp(target_duty, -1.0, 1.0);
-    }
-
-    // Deadzone compensation: масштабируем duty из [0,1] в [min_duty, 1]
-    // Это нужно потому что VESC не крутит мотор при очень малых duty (мёртвая зона)
-    // При duty=0 остаётся 0, при duty=0.01 становится ~min_duty, при duty=1 остаётся 1
-    double duty_cycle = 0.0;
-
-    if (min_duty_ > 0.0 && target_duty != 0.0) {
-        double abs_duty = std::abs(target_duty);
-        // Масштабируем: real_duty = min_duty + abs_duty * (1 - min_duty)
-        double scaled_duty = min_duty_ + abs_duty * (1.0 - min_duty_);
-        duty_cycle = (target_duty > 0) ? scaled_duty : -scaled_duty;
-    } else {
-        duty_cycle = target_duty;
-    }
-
-    // Логируем изменения значений
-    double speed_delta = std::abs(linear_speed - last_linear_speed_);
-    double duty_delta = std::abs(duty_cycle - last_duty_);
-    
-    if (speed_delta > 0.001 || duty_delta > 0.001) {  // Логируем только значимые изменения
-        RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                    "[%s] speed=%.4f m/s → duty=%.4f (Δspeed=%.4f, Δduty=%.4f)",
-                    label_.c_str(), linear_speed, duty_cycle, 
-                    speed_delta, duty_delta);
-    }
-    
-    last_linear_speed_ = linear_speed;
-    last_duty_ = duty_cycle;
-
-    // Отправляем duty cycle
-    auto frame = vesc_nexus::createSetDutyCycleFrame(can_id_, duty_cycle);
-    send_can_func_(frame);
-}
-
-void VescHandler::sendBrake(double brake) {
-    if (send_can_func_) {
-        auto frame = vesc_nexus::createSetBrakeFrame(can_id_, brake);
-        send_can_func_(frame);
-    }
-}
-
-void VescHandler::sendPosition(double pos) {
-    if (send_can_func_) {
-        auto frame = vesc_nexus::createSetPositionFrame(can_id_, pos);
-        send_can_func_(frame);
-    }
-}
-
-uint8_t VescHandler::getCanId() const {
-    return can_id_;
-}
-
-std::string VescHandler::getLabel() const {
-    return label_;
-}
-
-vesc_msgs::msg::VescState VescHandler::getLastState() const {
-    return last_state_;
-}
-
-double VescHandler::getWheelRadius() const {
-    return wheel_radius_;
-}
-
-int VescHandler::getPolePairs() const {
-    return pole_pairs_;
-}
+void VescHandler::setSendFrameFunc(SendFrameFunc func) { send_frame_ = std::move(func); }
 
 void VescHandler::setGearRatio(double gear_ratio) {
-    gear_ratio_ = (gear_ratio > 0.0) ? gear_ratio : 1.0;
-    updateMaxSpeed();
-    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                "[%s] Gear ratio: %.1f → wheel_rps=%.2f, max_speed=%.2f м/с",
-                label_.c_str(), gear_ratio_, max_rps_ / gear_ratio_, max_speed_mps_);
+  if (!std::isfinite(gear_ratio) || gear_ratio <= 0.0) {
+    RCLCPP_WARN(logger(), "[%s] ignoring invalid gear_ratio=%g, keeping %g", label_.c_str(), gear_ratio, gear_ratio_);
+    return;
+  }
+  gear_ratio_ = gear_ratio;
 }
 
 void VescHandler::setMaxRps(double max_rps) {
-    max_rps_ = max_rps;
-    updateMaxSpeed();
-    RCLCPP_INFO(rclcpp::get_logger("VescHandler"),
-                "[%s] Калибровка: max_rps=%.1f об/сек → max_speed=%.2f м/с",
-                label_.c_str(), max_rps_, max_speed_mps_);
+  if (!std::isfinite(max_rps) || max_rps <= 0.0) {
+    RCLCPP_WARN(logger(), "[%s] ignoring invalid max_rps=%g, keeping %g", label_.c_str(), max_rps, max_rps_);
+    return;
+  }
+  max_rps_ = max_rps;
 }
+
+void VescHandler::setMinDuty(double min_duty) {
+  if (!std::isfinite(min_duty) || min_duty < 0.0 || min_duty >= 1.0) {
+    RCLCPP_WARN(logger(), "[%s] ignoring invalid min_duty=%g, keeping %g", label_.c_str(), min_duty, min_duty_);
+    return;
+  }
+  min_duty_ = min_duty;
+}
+
+// ─── Команды ────────────────────────────────────────────────────────────────
+
+double VescHandler::motorRpsFor(double wheel_rad_s) const { return wheel_rad_s / kTwoPi * gear_ratio_; }
+
+double VescHandler::dutyFor(double wheel_rad_s) const {
+  double duty = std::clamp(motorRpsFor(wheel_rad_s) / max_rps_, -kDutyLimit, kDutyLimit);
+  // Компенсация мёртвой зоны: |duty| из (0, 1] отображается в [min_duty, 1], ноль остаётся нулём.
+  if (min_duty_ > 0.0 && duty != 0.0) {
+    duty = std::copysign(min_duty_ + std::abs(duty) * (1.0 - min_duty_), duty);
+  }
+  return duty;
+}
+
+double VescHandler::erpmFor(double wheel_rad_s) const { return motorRpsFor(wheel_rad_s) * pole_pairs_ * 60.0; }
+
+bool VescHandler::sendVelocity(double wheel_rad_s) {
+  if (!send_frame_) return false;
+  if (!std::isfinite(wheel_rad_s)) {
+    RCLCPP_ERROR_ONCE(logger(), "[%s] non-finite velocity command (%g), not sending", label_.c_str(), wheel_rad_s);
+    return false;
+  }
+
+  const can_frame frame = (control_mode_ == ControlMode::RPM)
+                              ? createSetErpmFrame(can_id_, erpmFor(wheel_rad_s))
+                              : createSetDutyCycleFrame(can_id_, dutyFor(wheel_rad_s));
+  return send_frame_(frame);
+}
+
+// ─── Телеметрия ─────────────────────────────────────────────────────────────
+
+void VescHandler::processCanFrame(const can_frame& frame) {
+  if (!(frame.can_id & CAN_EFF_FLAG)) return;  // VESC использует только 29-битные ID
+  if (vescIdFromCanId(frame.can_id) != can_id_) return;
+
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  switch (packetIdFromCanId(frame.can_id)) {
+    case CAN_PACKET_STATUS:
+      if (!parseStatusPacket(frame, state_)) return;
+      updateMotion();
+      break;
+    case CAN_PACKET_STATUS_2:
+      if (!parseStatus2Packet(frame, state_)) return;
+      break;
+    case CAN_PACKET_STATUS_4:
+      if (!parseStatus4Packet(frame, state_)) return;
+      break;
+    case CAN_PACKET_STATUS_5:
+      if (!parseStatus5Packet(frame, state_)) return;
+      break;
+    default:
+      return;
+  }
+  state_.alive = true;
+}
+
+void VescHandler::updateMotion() {
+  const auto now = std::chrono::steady_clock::now();
+
+  // ERPM → механические об/мин вала мотора → рад/с колеса.
+  state_.speed_rpm = finite_or(state_.erpm / pole_pairs_);
+  velocity_rad_s_ = finite_or(state_.speed_rpm * kTwoPi / 60.0 / gear_ratio_);
+
+  if (have_status_) {
+    const double dt = std::chrono::duration<double>(now - last_status_time_).count();
+    if (dt > 0.0 && dt < kMaxIntegrationDt) {
+      position_rad_ = finite_or(position_rad_ + velocity_rad_s_ * dt);
+    }
+  }
+  last_status_time_ = now;
+  have_status_ = true;
+}
+
+vesc_msgs::msg::VescState VescHandler::getLastState() const {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  return state_;
+}
+
+double VescHandler::getVelocityRadPerSec() const {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  return velocity_rad_s_;
+}
+
+double VescHandler::getAccumulatedPosition() const {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  return position_rad_;
+}
+
+}  // namespace vesc_nexus

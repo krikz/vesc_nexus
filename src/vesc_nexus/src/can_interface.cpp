@@ -1,120 +1,124 @@
-// can_interface.cpp
 #include "vesc_nexus/can_interface.hpp"
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <linux/can.h>
+
 #include <linux/can/raw.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
-#include <cstring>
-#include <iostream>
+
 #include <cerrno>
+#include <cstring>
+#include <utility>
+
 #include <rclcpp/rclcpp.hpp>
 
-CanInterface::CanInterface(const std::string& interface_name)
-    : interface_name_(interface_name), socket_(-1), running_(false) {}
+namespace vesc_nexus {
+namespace {
 
-CanInterface::~CanInterface() {
-    close();
+rclcpp::Logger logger() { return rclcpp::get_logger("CanInterface"); }
+
+rclcpp::Clock& throttleClock() {
+  static rclcpp::Clock clock(RCL_STEADY_TIME);
+  return clock;
 }
 
+/// Таймаут read(): поток приёма периодически просыпается и замечает close().
+constexpr long kReceiveTimeoutUs = 100000;  // 100 мс
+
+}  // namespace
+
+CanInterface::CanInterface(std::string interface_name) : interface_name_(std::move(interface_name)) {}
+
+CanInterface::~CanInterface() { close(); }
+
+void CanInterface::setReceiveCallback(FrameCallback callback) { callback_ = std::move(callback); }
+
 bool CanInterface::open() {
-    if (running_) return true;
+  if (running_) return true;
 
-    struct sockaddr_can addr;
-    struct ifreq ifr;
+  socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
+  if (socket_ < 0) {
+    RCLCPP_ERROR(logger(), "socket(PF_CAN, SOCK_RAW): %s", std::strerror(errno));
+    return false;
+  }
 
-    socket_ = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
-    if (socket_ < 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Failed to create CAN socket");
-        return false;
-    }
+  ifreq ifr{};
+  std::strncpy(ifr.ifr_name, interface_name_.c_str(), IFNAMSIZ - 1);
+  if (::ioctl(socket_, SIOCGIFINDEX, &ifr) < 0) {
+    RCLCPP_ERROR(logger(), "CAN interface '%s' not found: %s", interface_name_.c_str(), std::strerror(errno));
+    ::close(socket_);
+    socket_ = -1;
+    return false;
+  }
 
-    std::strcpy(ifr.ifr_name, interface_name_.c_str());
-    if (ioctl(socket_, SIOCGIFINDEX, &ifr) < 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Cannot find CAN interface: %s", interface_name_.c_str());
-        ::close(socket_);
-        socket_ = -1;
-        return false;
-    }
+  timeval timeout{};
+  timeout.tv_usec = kReceiveTimeoutUs;
+  if (::setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+    RCLCPP_WARN(logger(), "setsockopt(SO_RCVTIMEO) failed: %s — close() may block until the next frame",
+                std::strerror(errno));
+  }
 
-    addr.can_family = AF_CAN;
-    addr.can_ifindex = ifr.ifr_ifindex;
+  sockaddr_can addr{};
+  addr.can_family = AF_CAN;
+  addr.can_ifindex = ifr.ifr_ifindex;
+  if (::bind(socket_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+    RCLCPP_ERROR(logger(), "bind('%s'): %s", interface_name_.c_str(), std::strerror(errno));
+    ::close(socket_);
+    socket_ = -1;
+    return false;
+  }
 
-    if (::bind(socket_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Cannot bind to CAN socket");
-        ::close(socket_);
-        socket_ = -1;
-        return false;
-    }
-
-    running_ = true;
-    receive_thread_ = std::thread(&CanInterface::receiveLoop, this);
-
-    RCLCPP_INFO(rclcpp::get_logger("CanInterface"), "CAN interface %s opened successfully", interface_name_.c_str());
-    return true;
+  running_ = true;
+  receive_thread_ = std::thread(&CanInterface::receiveLoop, this);
+  RCLCPP_INFO(logger(), "CAN interface '%s' opened", interface_name_.c_str());
+  return true;
 }
 
 void CanInterface::close() {
-    if (running_) {
-        running_ = false;
-        if (receive_thread_.joinable()) {
-            receive_thread_.join();
-        }
-        if (socket_ >= 0) {
-            ::close(socket_);
-            socket_ = -1;
-        }
-        RCLCPP_INFO(rclcpp::get_logger("CanInterface"), "CAN interface closed");
-    }
+  if (!running_ && socket_ < 0) return;
+
+  running_ = false;
+  if (receive_thread_.joinable()) receive_thread_.join();
+
+  std::lock_guard<std::mutex> lock(send_mutex_);
+  if (socket_ >= 0) {
+    ::close(socket_);
+    socket_ = -1;
+  }
+  RCLCPP_INFO(logger(), "CAN interface '%s' closed", interface_name_.c_str());
 }
 
-// can_interface.cpp
-bool CanInterface::sendFrame(const struct can_frame& frame) {
-    std::lock_guard<std::mutex> lock(socket_mutex_);
-    if (!running_ || socket_ < 0) {
-        RCLCPP_WARN(rclcpp::get_logger("CanInterface"), "Attempted to send CAN frame, but interface is not running");
-        return false;
-    }
+bool CanInterface::sendFrame(const can_frame& frame) {
+  std::lock_guard<std::mutex> lock(send_mutex_);
+  if (!running_ || socket_ < 0) {
+    RCLCPP_WARN_THROTTLE(logger(), throttleClock(), 5000, "sendFrame: interface '%s' is not open",
+                         interface_name_.c_str());
+    return false;
+  }
 
-    // 🔹 Логируем отправку CAN-фрейма
-    //RCLCPP_INFO(rclcpp::get_logger("CanInterface"),
-    //             "Sending CAN frame: ID=0x%X, DLC=%d, Data=[%02X %02X %02X %02X %02X %02X %02X %02X]",
-    //             frame.can_id, frame.can_dlc,
-    //             frame.data[0], frame.data[1], frame.data[2], frame.data[3],
-    //             frame.data[4], frame.data[5], frame.data[6], frame.data[7]);
-
-    int nbytes = ::write(socket_, &frame, sizeof(struct can_frame));
-    if (nbytes != sizeof(struct can_frame)) {
-        //int err = errno;
-        //RCLCPP_ERROR(rclcpp::get_logger("CanInterface"),
-        //             "Failed to send CAN frame: write() returned %d, errno=%d (%s)",
-        //             nbytes, err, strerror(err));
-        return false;
-    }
-
-    return true;
-}
-
-void CanInterface::setReceiveCallback(CanFrameCallback cb) {
-    callback_ = cb;
-}
-
-bool CanInterface::isRunning() const {
-    return running_;
+  const ssize_t written = ::write(socket_, &frame, sizeof(frame));
+  if (written != static_cast<ssize_t>(sizeof(frame))) {
+    RCLCPP_WARN_THROTTLE(logger(), throttleClock(), 5000, "write('%s') failed: %s", interface_name_.c_str(),
+                         std::strerror(errno));
+    return false;
+  }
+  return true;
 }
 
 void CanInterface::receiveLoop() {
-    struct can_frame frame;
-    while (running_) {
-        int nbytes = ::read(socket_, &frame, sizeof(struct can_frame));
-        if (nbytes > 0 && callback_) {
-            callback_(frame);
-        } else if (nbytes < 0) {
-            if (errno != EAGAIN) {
-                RCLCPP_ERROR(rclcpp::get_logger("CanInterface"), "Error reading CAN socket");
-                break;
-            }
-        }
+  can_frame frame{};
+  while (running_) {
+    const ssize_t received = ::read(socket_, &frame, sizeof(frame));
+    if (received == static_cast<ssize_t>(sizeof(frame))) {
+      if (callback_) callback_(frame);
+    } else if (received < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
+      RCLCPP_ERROR(logger(), "read('%s') failed: %s — receive loop stopped", interface_name_.c_str(),
+                   std::strerror(errno));
+      break;
     }
+  }
 }
+
+}  // namespace vesc_nexus

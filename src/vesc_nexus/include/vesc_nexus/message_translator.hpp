@@ -1,60 +1,53 @@
-// message_translator.hpp
+// Протокол VESC по CAN: кодирование команд и разбор статусных пакетов.
+// Источник: прошивка bldc (comm_can.c, datatypes.h — CAN_PACKET_ID).
 #pragma once
 
 #include <linux/can.h>
-#include <vesc_msgs/msg/vesc_state.hpp>
-#include <rclcpp/rclcpp.hpp>
+
+#include <cmath>
 #include <cstdint>
+
 #include <vesc_msgs/msg/vesc_state.hpp>
 
 namespace vesc_nexus {
 
-struct CommandLimits {
-    double duty_cycle_min = -1.0;
-    double duty_cycle_max = 1.0;
-    double current_min = -10.0;
-    double current_max = 10.0;
-    double speed_min = -23250.0;
-    double speed_max = 23250.0;
-    double brake_min = -20000.0;
-    double brake_max = 200000.0;
-    double position_min = 0.0;
-    double position_max = 360.0;
-    double servo_min = 0.15;
-    double servo_max = 0.85;
-};
+/// Возвращает value, если оно конечно (не NaN/Inf), иначе fallback.
+inline double finite_or(double value, double fallback = 0.0) {
+  return std::isfinite(value) ? value : fallback;
+}
 
-// CAN Packet IDs (из спецификации)
+/// Идентификаторы пакетов VESC. CAN ID фрейма = (packet_id << 8) | vesc_id, 29-битный (EFF).
 enum CanPacketId : uint8_t {
-    CAN_PACKET_SET_DUTY = 0,
-    CAN_PACKET_SET_CURRENT = 1,
-    CAN_PACKET_SET_CURRENT_BRAKE = 2,
-    CAN_PACKET_SET_RPM = 3,
-    CAN_PACKET_SET_POS = 4,
-    // ... другие, если нужно
-    CAN_PACKET_STATUS = 9,
-    CAN_PACKET_STATUS_2 = 14,
-    CAN_PACKET_STATUS_3 = 15,
-    CAN_PACKET_STATUS_4 = 16,
-    CAN_PACKET_STATUS_5 = 27,
-    CAN_PACKET_STATUS_6 = 58
+  CAN_PACKET_SET_DUTY = 0,
+  CAN_PACKET_SET_CURRENT = 1,
+  CAN_PACKET_SET_CURRENT_BRAKE = 2,
+  CAN_PACKET_SET_RPM = 3,
+  CAN_PACKET_SET_POS = 4,
+  CAN_PACKET_STATUS = 9,     ///< ERPM, ток мотора, duty cycle
+  CAN_PACKET_STATUS_2 = 14,  ///< Ah израсходовано / Ah заряжено
+  CAN_PACKET_STATUS_3 = 15,  ///< Wh израсходовано / Wh заряжено (не разбирается)
+  CAN_PACKET_STATUS_4 = 16,  ///< Температура FET и мотора, входной ток, PID-позиция
+  CAN_PACKET_STATUS_5 = 27,  ///< Тахометр, входное напряжение
+  CAN_PACKET_STATUS_6 = 58   ///< ADC1-3, PPM (не разбирается)
 };
 
-// Утилита: big-endian запись
-void buffer_append_int32(uint8_t* buffer, int32_t number, int& index);
-void buffer_append_int16(uint8_t* buffer, int16_t number, int& index);
+/// Пределы команд, которые уходят на шину.
+constexpr double kDutyLimit = 1.0;      ///< ±100 %
+constexpr double kErpmLimit = 23250.0;  ///< ±ERPM, защитный потолок (унаследован от vesc_driver)
 
-// Команды
-can_frame createSetDutyCycleFrame(uint8_t can_id, double duty);
-can_frame createSetCurrentFrame(uint8_t can_id, double current);
-can_frame createSetSpeedFrame(uint8_t can_id, double rpm);
-can_frame createSetBrakeFrame(uint8_t can_id, double brake);
-can_frame createSetPositionFrame(uint8_t can_id, double pos);
+inline uint8_t vescIdFromCanId(canid_t can_id) { return static_cast<uint8_t>(can_id & 0xFF); }
+inline uint8_t packetIdFromCanId(canid_t can_id) { return static_cast<uint8_t>((can_id >> 8) & 0xFF); }
 
-// Парсинг входящих статусов
-void parseStatusPacket(const can_frame& frame, vesc_msgs::msg::VescState& state);
-void parseStatus2Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);
-void parseStatus4Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);
-void parseStatus5Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);
+/// CAN_PACKET_SET_DUTY: duty ∈ [-1, 1], на шине умножается на 100000. NaN/Inf → 0.
+can_frame createSetDutyCycleFrame(uint8_t vesc_id, double duty);
 
-} // namespace vesc_nexus
+/// CAN_PACKET_SET_RPM: электрические обороты в минуту, клампится в ±kErpmLimit. NaN/Inf → 0.
+can_frame createSetErpmFrame(uint8_t vesc_id, double erpm);
+
+/// Разбор статусных пакетов. Возвращают false (и не трогают state), если фрейм короче ожидаемого.
+bool parseStatusPacket(const can_frame& frame, vesc_msgs::msg::VescState& state);   ///< erpm, current_motor, duty_cycle
+bool parseStatus2Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);  ///< charge_drawn, charge_regen
+bool parseStatus4Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);  ///< temp_controller, temp_motor, current_input, pid_pos_now
+bool parseStatus5Packet(const can_frame& frame, vesc_msgs::msg::VescState& state);  ///< tachometer, voltage_input
+
+}  // namespace vesc_nexus
