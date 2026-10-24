@@ -3,10 +3,10 @@ project(vesc_nexus)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-# ═══════════════════════════════════════════════════════════════
-# Dependencies
-# ═══════════════════════════════════════════════════════════════
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
@@ -15,25 +15,18 @@ find_package(pluginlib REQUIRED)
 find_package(vesc_msgs REQUIRED)
 find_package(Threads REQUIRED)
 
-# ═══════════════════════════════════════════════════════════════
-# Hardware Interface Library (ros2_control plugin)
-# ═══════════════════════════════════════════════════════════════
+# ros2_control hardware plugin
 add_library(vesc_hardware_interface SHARED
-  src/vesc_system_hardware_interface.cpp
-  src/vesc_handler.cpp
   src/can_interface.cpp
   src/message_translator.cpp
+  src/vesc_handler.cpp
+  src/vesc_system_hardware_interface.cpp
 )
-
 target_include_directories(vesc_hardware_interface PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-
-target_link_libraries(vesc_hardware_interface
-  ${CMAKE_THREAD_LIBS_INIT}
-)
-
+target_link_libraries(vesc_hardware_interface Threads::Threads)
 ament_target_dependencies(vesc_hardware_interface
   rclcpp
   rclcpp_lifecycle
@@ -42,9 +35,6 @@ ament_target_dependencies(vesc_hardware_interface
   vesc_msgs
 )
 
-# ═══════════════════════════════════════════════════════════════
-# Install & Export
-# ═══════════════════════════════════════════════════════════════
 pluginlib_export_plugin_description_file(hardware_interface vesc_nexus_plugins.xml)
 
 install(TARGETS vesc_hardware_interface
@@ -52,61 +42,28 @@ install(TARGETS vesc_hardware_interface
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
+install(DIRECTORY include/ DESTINATION include)
 
-install(DIRECTORY include/
-  DESTINATION include
-)
-
-# Install calibration tools
+# Calibration and manual-control tools (python-can based, run outside ROS)
 install(DIRECTORY tools/
   DESTINATION share/${PROJECT_NAME}/tools
-  PATTERN "*.py"
-  PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+  USE_SOURCE_PERMISSIONS
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "tests" EXCLUDE
 )
 
-# ═══════════════════════════════════════════════════════════════
-# Testing
-# ═══════════════════════════════════════════════════════════════
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
-
   find_package(ament_cmake_gtest REQUIRED)
 
-  # Unit tests: NaN/Infinity guard для VESC hardware interface (FA-3)
-  ament_add_gtest(test_message_translator
-    test/test_message_translator.cpp
-  )
-  if(TARGET test_message_translator)
-    target_include_directories(test_message_translator PRIVATE
-      include
-    )
-    target_link_libraries(test_message_translator
-      vesc_hardware_interface
-    )
-  endif()
+  ament_add_gtest(test_message_translator test/test_message_translator.cpp)
+  target_link_libraries(test_message_translator vesc_hardware_interface)
 
-  ament_add_gtest(test_vesc_handler
-    test/test_vesc_handler.cpp
-  )
-  if(TARGET test_vesc_handler)
-    target_include_directories(test_vesc_handler PRIVATE
-      include
-    )
-    target_link_libraries(test_vesc_handler
-      vesc_hardware_interface
-    )
-  endif()
+  ament_add_gtest(test_vesc_handler test/test_vesc_handler.cpp)
+  target_link_libraries(test_vesc_handler vesc_hardware_interface)
 endif()
 
 ament_export_include_directories(include)
 ament_export_libraries(vesc_hardware_interface)
-ament_export_dependencies(
-  rclcpp
-  rclcpp_lifecycle
-  hardware_interface
-  pluginlib
-  vesc_msgs
-)
+ament_export_dependencies(rclcpp rclcpp_lifecycle hardware_interface pluginlib vesc_msgs)
 
 ament_package()

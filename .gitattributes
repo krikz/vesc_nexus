@@ -1,0 +1,3 @@
+# Repository targets Linux (ROS 2 / Docker): keep LF in the working tree on every platform.
+* text=auto eol=lf
+*.png binary

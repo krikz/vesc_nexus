@@ -1,33 +1,50 @@
-// can_interface.hpp
+// Обёртка над SocketCAN: один RAW-сокет, фоновый поток приёма, потокобезопасная отправка.
 #pragma once
 
 #include <linux/can.h>
-#include <string>
-#include <functional>
-#include <thread>
+
 #include <atomic>
+#include <functional>
 #include <mutex>
+#include <string>
+#include <thread>
+
+namespace vesc_nexus {
 
 class CanInterface {
 public:
-    using CanFrameCallback = std::function<void(const struct can_frame&)>;
+  using FrameCallback = std::function<void(const can_frame&)>;
 
-    explicit CanInterface(const std::string& interface_name);
-    ~CanInterface();
+  explicit CanInterface(std::string interface_name);
+  ~CanInterface();
 
-    bool open();
-    void close();
-    bool sendFrame(const struct can_frame& frame);
-    void setReceiveCallback(CanFrameCallback cb);
-    bool isRunning() const;
+  CanInterface(const CanInterface&) = delete;
+  CanInterface& operator=(const CanInterface&) = delete;
+
+  /// Открыть сокет и запустить поток приёма. Повторный вызов на открытом интерфейсе — no-op, true.
+  bool open();
+
+  /// Остановить поток приёма и закрыть сокет. Безопасно вызывать повторно.
+  void close();
+
+  /// Отправить фрейм. false — интерфейс закрыт или write() не удался (ошибка логируется с троттлингом).
+  bool sendFrame(const can_frame& frame);
+
+  /// Колбэк вызывается из потока приёма. Устанавливать до open().
+  void setReceiveCallback(FrameCallback callback);
+
+  bool isOpen() const { return running_; }
+  const std::string& name() const { return interface_name_; }
 
 private:
-    std::string interface_name_;
-    int socket_;
-    std::atomic<bool> running_;
-    CanFrameCallback callback_;
-    std::thread receive_thread_;
-    mutable std::mutex socket_mutex_;
+  void receiveLoop();
 
-    void receiveLoop();
+  std::string interface_name_;
+  int socket_{-1};
+  std::atomic<bool> running_{false};
+  FrameCallback callback_;
+  std::thread receive_thread_;
+  std::mutex send_mutex_;
 };
+
+}  // namespace vesc_nexus
