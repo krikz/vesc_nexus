@@ -1,27 +1,26 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-.eggs/
-dist/
-build/
-
-# ROS 2
+# colcon / ROS 2
 build/
 install/
 log/
 .colcon/
 
-# IDE
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+*.egg-info/
+
+# Outputs of calibration tools
+calibration_results.yaml
+linearity_*.csv
+linearity_*.json
+linearity_*.png
+
+# IDE / OS
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
