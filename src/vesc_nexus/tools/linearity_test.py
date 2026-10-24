@@ -46,6 +46,7 @@ DEFAULT_DUTY_STEP = 0.01   # Шаг 1%
 DEFAULT_DUTY_MAX = 1.0     # Максимум 100%
 SETTLE_TIME = 0.8          # Время стабилизации
 SAMPLES_PER_POINT = 5      # Количество измерений для усреднения
+MAX_CONSECUTIVE_CAN_ERRORS = 10  # Порог подряд идущих ошибок CAN — после него тест прерывается
 
 
 @dataclass
@@ -75,6 +76,7 @@ class VescLinearityTester:
     def __init__(self, can_interface: str):
         self.can_interface = can_interface
         self.bus: Optional[can.Bus] = None
+        self.consecutive_can_errors = 0  # подряд идущие ошибки CAN (read/send)
 
     def connect(self) -> bool:
         """Подключение к CAN шине."""
@@ -103,8 +105,20 @@ class VescLinearityTester:
         )
         try:
             self.bus.send(msg)
+            self.consecutive_can_errors = 0
         except can.CanError as e:
-            print(f"Ошибка CAN: {e}")
+            self._register_can_error(f"отправка duty={duty:+.2f} на VESC {vesc_id}", e)
+
+    def _register_can_error(self, operation: str, error: Exception):
+        """Учесть ошибку CAN: предупредить и прервать тест после порога подряд идущих сбоев."""
+        self.consecutive_can_errors += 1
+        print(f"⚠️  Ошибка CAN ({operation}): {error} "
+              f"[{self.consecutive_can_errors}/{MAX_CONSECUTIVE_CAN_ERRORS} подряд]")
+        if self.consecutive_can_errors >= MAX_CONSECUTIVE_CAN_ERRORS:
+            raise RuntimeError(
+                f"CAN-шина нестабильна: {self.consecutive_can_errors} ошибок подряд "
+                f"({operation}: {error}). Прерываю тест — проверьте подключение CAN."
+            ) from error
 
     def read_status(self, timeout: float = 0.1) -> Optional[tuple]:
         """Чтение статуса VESC."""
@@ -119,9 +133,10 @@ class VescLinearityTester:
             if cmd_id == CAN_PACKET_STATUS and len(msg.data) >= 8:
                 erpm = struct.unpack('>i', msg.data[0:4])[0]
                 current = struct.unpack('>h', msg.data[4:6])[0] / 10.0
+                self.consecutive_can_errors = 0
                 return (vesc_id, erpm, current)
-        except Exception:
-            pass
+        except (can.CanError, struct.error, ValueError) as e:
+            self._register_can_error("чтение статуса", e)
         return None
 
     def measure_point(self, vesc_id: int, duty: float) -> MeasurementPoint:
@@ -142,6 +157,12 @@ class VescLinearityTester:
 
         avg_rpm = sum(rpm_values) / len(rpm_values) if rpm_values else 0.0
         avg_current = sum(current_values) / len(current_values) if current_values else 0.0
+
+        if not rpm_values:
+            # Ноль измерений за окно — это не «мотор стоит», а признак проблем
+            # с шиной/ID. Предупреждаем, чтобы линейность не строилась по мусору.
+            print(f"⚠️  VESC {vesc_id} не прислал ни одного статуса при duty={duty:+.2f} "
+                  f"(0 из {SAMPLES_PER_POINT} измерений) — проверьте CAN и VESC ID")
 
         return MeasurementPoint(
             duty_cycle=duty,
