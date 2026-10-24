@@ -70,6 +70,33 @@ install(DIRECTORY tools/
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+
+  # Unit tests: NaN/Infinity guard для VESC hardware interface (FA-3)
+  ament_add_gtest(test_message_translator
+    test/test_message_translator.cpp
+  )
+  if(TARGET test_message_translator)
+    target_include_directories(test_message_translator PRIVATE
+      include
+    )
+    target_link_libraries(test_message_translator
+      vesc_hardware_interface
+    )
+  endif()
+
+  ament_add_gtest(test_vesc_handler
+    test/test_vesc_handler.cpp
+  )
+  if(TARGET test_vesc_handler)
+    target_include_directories(test_vesc_handler PRIVATE
+      include
+    )
+    target_link_libraries(test_vesc_handler
+      vesc_hardware_interface
+    )
+  endif()
 endif()
 
 ament_export_include_directories(include)
