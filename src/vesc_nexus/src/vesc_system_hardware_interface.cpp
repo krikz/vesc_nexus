@@ -75,8 +75,10 @@ void warnIgnored(const Params& params, const std::string& scope, std::initialize
 
 // ─── Жизненный цикл ─────────────────────────────────────────────────────────
 
-CallbackReturn VescSystemHardwareInterface::on_init(const hardware_interface::HardwareInfo& info) {
-  if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS) return CallbackReturn::ERROR;
+CallbackReturn VescSystemHardwareInterface::on_init(
+    const hardware_interface::HardwareComponentInterfaceParams& params) {
+  if (SystemInterface::on_init(params) != CallbackReturn::SUCCESS) return CallbackReturn::ERROR;
+  const auto& info = get_hardware_info();
 
   try {
     const Params& hw = info.hardware_parameters;
@@ -211,7 +213,7 @@ void VescSystemHardwareInterface::stopAllMotors() {
 std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::export_state_interfaces() {
   std::vector<hardware_interface::StateInterface> interfaces;
   for (size_t i = 0; i < handlers_.size(); ++i) {
-    const std::string& joint = info_.joints[i].name;
+    const std::string& joint = get_hardware_info().joints[i].name;
     interfaces.emplace_back(joint, hardware_interface::HW_IF_POSITION, &hw_positions_[i]);
     interfaces.emplace_back(joint, hardware_interface::HW_IF_VELOCITY, &hw_velocities_[i]);
     interfaces.emplace_back(joint, hardware_interface::HW_IF_EFFORT, &hw_efforts_[i]);
@@ -223,7 +225,7 @@ std::vector<hardware_interface::StateInterface> VescSystemHardwareInterface::exp
 std::vector<hardware_interface::CommandInterface> VescSystemHardwareInterface::export_command_interfaces() {
   std::vector<hardware_interface::CommandInterface> interfaces;
   for (size_t i = 0; i < handlers_.size(); ++i) {
-    interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &cmd_velocities_[i]);
+    interfaces.emplace_back(get_hardware_info().joints[i].name, hardware_interface::HW_IF_VELOCITY, &cmd_velocities_[i]);
   }
   return interfaces;
 }
